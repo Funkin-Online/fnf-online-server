@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>FNF Online — server tester</title>
+<style>
+  :root {
+    --bg: #14061f;
+    --panel: #1f0b2e;
+    --panel2: #2b1140;
+    --line: #4a1f68;
+    --pink: #ff4bd8;
+    --green: #4bffa5;
+    --yellow: #ffe14b;
+    --text: #f3e9ff;
+    --dim: #a98cc4;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: radial-gradient(circle at 50% -10%, #3a0f57 0%, var(--bg) 60%);
+    color: var(--text); font: 16px/1.45 "Segoe UI", system-ui, sans-serif; padding: 28px 16px 60px;
+  }
+  main { max-width: 880px; margin: 0 auto; }
+  h1 { margin: 0 0 4px; font-size: 30px; letter-spacing: 1px; }
+  h1 span { color: var(--pink); }
+  .sub { color: var(--dim); margin: 0 0 22px; font-size: 14px; }
+  .panel { background: linear-gradient(180deg, var(--panel), #180824); border: 2px solid var(--line); border-radius: 14px; padding: 18px; margin-bottom: 16px; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  label { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--dim); display: block; margin-bottom: 4px; }
+  input, select {
+    background: #12061c; color: var(--text); border: 2px solid var(--line); border-radius: 9px;
+    padding: 10px 12px; font: inherit; font-size: 15px; outline: none;
+  }
+  input:focus, select:focus { border-color: var(--pink); }
+  button {
+    background: var(--panel2); color: var(--text); border: 2px solid var(--line); border-radius: 9px;
+    padding: 10px 16px; font: inherit; font-weight: 600; cursor: pointer; transition: .12s;
+  }
+  button:hover:not(:disabled) { border-color: var(--pink); transform: translateY(-1px); }
+  button:disabled { opacity: .35; cursor: not-allowed; }
+  button.primary { background: var(--pink); border-color: var(--pink); color: #22001c; }
+  button.good { background: var(--green); border-color: var(--green); color: #04220f; }
+  button.warn { background: var(--yellow); border-color: var(--yellow); color: #241d00; }
+  .code { font-family: Consolas, monospace; font-size: 44px; letter-spacing: 10px; color: var(--yellow); text-align: center; padding: 6px 0 2px; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 680px) { .cols { grid-template-columns: 1fr; } }
+  .chip { display: inline-flex; gap: 6px; align-items: center; background: #12061c; border: 1px solid var(--line); border-radius: 99px; padding: 4px 10px; font-size: 13px; margin: 0 6px 6px 0; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+  .dot.off { background: #ff5a5a; }
+  .songs { max-height: 240px; overflow: auto; border: 2px solid var(--line); border-radius: 10px; padding: 8px; background: #12061c; }
+  .songs label { display: flex; gap: 8px; align-items: center; text-transform: none; letter-spacing: 0; font-size: 14px; color: var(--text); margin: 0; padding: 5px 6px; border-radius: 6px; cursor: pointer; }
+  .songs label:hover { background: #220d33; }
+  .mono { font-family: Consolas, monospace; font-size: 12px; color: var(--dim); white-space: pre-wrap; word-break: break-all; }
+  .big { font-size: 22px; font-weight: 700; }
+  .status { font-size: 13px; color: var(--dim); min-height: 18px; }
+  .status.err { color: #ff7a7a; }
+  .hidden { display: none !important; }
+  .spacer { flex: 1; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); }
+  th { color: var(--dim); font-size: 12px; text-transform: uppercase; letter-spacing: 1px; }
+  .win { color: var(--green); font-weight: 700; }
+</style>
+</head>
+<body>
+<main>
+  <h1>FNF <span>ONLINE</span> server tester</h1>
+  <p class="sub">Open this page twice (two browser windows, or one normal + one incognito) to simulate two players.</p>
+
+  <div class="panel" id="setup">
+    <div class="row">
+      <div style="flex:1;min-width:220px">
+        <label>Server URL</label>
+        <input id="serverUrl" style="width:100%" />
+      </div>
+      <div style="min-width:170px">
+        <label>Your name</label>
+        <input id="playerName" style="width:100%" />
+      </div>
+      <div style="align-self:flex-end"><button class="primary" id="connectBtn">Connect</button></div>
+    </div>
+    <p class="status" id="connStatus">Not connected.</p>
+  </div>
+
+  <div class="cols">
+    <div class="panel">
+      <label>Host</label>
+      <button class="primary" id="hostBtn" disabled>Create lobby</button>
+      <p class="status">You get a 6 digit code. Only 1v1 for now.</p>
+    </div>
+    <div class="panel">
+      <label>Join with code</label>
+      <div class="row">
+        <input id="joinCode" inputmode="numeric" maxlength="6" placeholder="123456" style="width:150px;font-family:Consolas,monospace;letter-spacing:4px" />
+        <button id="joinBtn" disabled>Join</button>
+      </div>
+      <p class="status" id="joinStatus"></p>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="row">
+      <div>
+        <label>Find a random opponent</label>
+        <button class="warn" id="findBtn" disabled>Find match</button>
+      </div>
+      <div class="spacer"></div>
+      <div>
+        <label>Song catalog sent to server</label>
+        <span class="chip"><span class="dot"></span><span id="catalogCount">0</span> songs</span>
+      </div>
+    </div>
+    <p class="status" id="findStatus"></p>
+  </div>
+
+  <div class="panel hidden" id="lobbyPanel">
+    <div class="row" style="align-items:flex-start">
+      <div style="flex:1">
+        <label>Lobby code</label>
+        <div class="code" id="lobbyCode">------</div>
+        <p class="status" id="phaseText"></p>
+      </div>
+      <div style="text-align:right">
+        <button id="leaveBtn">Leave</button>
+      </div>
+    </div>
+
+    <div id="players"></div>
+
+    <div class="row" style="margin:10px 0 14px">
+      <div>
+        <label>Win condition</label>
+        <div class="row" id="modeRow">
+          <button data-mode="score">Score</button>
+          <button data-mode="accuracy">Accuracy</button>
+          <button data-mode="misses">Misses</button>
+        </div>
+      </div>
+      <div class="spacer"></div>
+      <div style="align-self:flex-end" class="row">
+        <button class="good" id="readyBtn">Ready</button>
+        <button id="startBtn">Force start</button>
+        <button id="rematchBtn" class="hidden">Rematch</button>
+      </div>
+    </div>
+
+    <div class="row" id="pickingWrap">
+      <div style="flex:1;min-width:260px">
+        <label>Your song picks (<span id="pickCount">0</span> selected)</label>
+        <input id="songSearch" placeholder="Search songs…" style="width:100%;margin-bottom:8px" />
+        <div class="songs" id="songList"></div>
+      </div>
+      <div style="flex:1;min-width:260px">
+        <label>Match state</label>
+        <div class="mono" id="stateDump">—</div>
+      </div>
+    </div>
+
+    <div id="playingWrap" class="hidden">
+      <label>Song (chosen at random from both players' picks)</label>
+      <div class="big" id="songName">—</div>
+      <p class="status" id="countdownText"></p>
+      <label style="margin-top:12px">Fake results (what the real client sends when the song ends)</label>
+      <div class="row">
+        <input id="rScore" type="number" value="120000" placeholder="score" style="width:130px" />
+        <input id="rAcc" type="number" step="0.01" value="97.5" placeholder="accuracy" style="width:110px" />
+        <input id="rMiss" type="number" value="3" placeholder="misses" style="width:100px" />
+        <select id="rFailed"><option value="0">survived</option><option value="1">died</option></select>
+        <button class="good" id="submitBtn">Finish song</button>
+      </div>
+    </div>
+
+    <div id="resultsWrap" class="hidden">
+      <div class="big" id="resultTitle">—</div>
+      <table id="resultTable"></table>
+      <p class="status">The real game shows this as its own results state.</p>
+    </div>
+  </div>
+
+  <p class="mono" id="log"></p>
+</main>
+
+<script>
+(() => {
+  const CATALOG = [
+    ['bopeebo', 'Bopeebo'], ['fresh', 'Fresh'], ['dadbattle', 'Dad Battle'],
+    ['spookeez', 'Spookeez'], ['south', 'South'], ['monster', 'Monster'],
+    ['pico', 'Pico'], ['philly-nice', 'Philly Nice'], ['blammed', 'Blammed'],
+    ['satin-panties', 'Satin Panties'], ['high', 'High'], ['milf', 'M.I.L.F'],
+    ['cocoa', 'Cocoa'], ['eggnog', 'Eggnog'], ['winter-horrorland', 'Winter Horrorland'],
+    ['senpai', 'Senpai'], ['roses', 'Roses'], ['thorns', 'Thorns'],
+    ['ugh', 'Ugh'], ['guns', 'Guns'], ['stress', 'Stress'],
+  ].map(([id, name]) => ({ id, name }));
+
+  const $ = (id) => document.getElementById(id);
+  const state = { url: location.origin, token: null, name: '', lobby: null, queued: false, picks: new Set(), timer: null, ready: false };
+
+  function log(msg) {
+    const line = `[${new Date().toLocaleTimeString()}] ${msg}`;
+    $('log').textContent = line + '\n' + $('log').textContent;
+  }
+
+  function setStatus(id, msg, isErr) {
+    const el = $(id);
+    el.textContent = msg || '';
+    el.classList.toggle('err', !!isErr);
+  }
+
+  async function api(path, body = {}) {
+    const res = await fetch(state.url.replace(/\/$/, '') + path, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ token: state.token, ...body }),
+    });
+    const json = await res.json().catch(() => ({ ok: false, error: 'Bad JSON from server' }));
+    if (!json.ok) throw new Error(json.error || `HTTP ${res.status}`);
+    if (json.token) state.token = json.token;
+    return json;
+  }
+
+  function connect() {
+    state.url = $('serverUrl').value.trim() || location.origin;
+    state.name = $('playerName').value.trim();
+    api('/api/session', { name: state.name })
+      .then((json) => {
+        state.name = json.name;
+        $('playerName').value = json.name;
+        setStatus('connStatus', `Connected to ${state.url} as ${json.name}`);
+        ['hostBtn', 'joinBtn', 'findBtn'].forEach((id) => ($(id).disabled = false));
+        log('session created ' + json.playerId);
+      })
+      .catch((e) => setStatus('connStatus', e.message, true));
+  }
+
+  async function enterLobby(lobby) {
+    state.lobby = lobby;
+    state.picks = new Set(lobby.you.picks);
+    if (!state.timer) state.timer = setInterval(poll, 900);
+    render();
+    log('in lobby ' + lobby.code + ' (' + lobby.phase + ')');
+  }
+
+  async function poll() {
+    if (!state.token) return;
+    try {
+      const json = await api('/api/lobby/state');
+      state.queued = json.queued;
+      if (json.lobby) {
+        state.lobby = json.lobby;
+        $('lobbyPanel').classList.remove('hidden');
+        render();
+      } else {
+        state.lobby = null;
+        if (state.queued) setStatus('findStatus', 'Searching for an opponent… keep this tab open.');
+      }
+    } catch (e) {
+      log('poll: ' + e.message);
+    }
+  }
+
+  function render() {
+    const l = state.lobby;
+    if (!l) return;
+    $('lobbyPanel').classList.remove('hidden');
+    $('lobbyCode').textContent = l.code;
+    $('phaseText').textContent = `phase: ${l.phase} · mode: ${l.mode}` + (l.matchmade ? ' (matchmade)' : '');
+
+    $('players').innerHTML = l.players
+      .map((p) => `<span class="chip"><span class="dot ${p.connected ? '' : 'off'}"></span>${esc(p.name)}${p.isHost ? ' · host' : ''}${p.ready ? ' · ready' : ''} · ${p.picks.length} pick(s)</span>`)
+      .join('');
+
+    const me = l.players.find((p) => p.id === l.you.id) || { ready: false, picks: [] };
+    $('readyBtn').textContent = me.ready ? 'Unready' : 'Ready';
+    $('readyBtn').classList.toggle('good', !me.ready);
+    $('readyBtn').disabled = l.phase !== 'picking';
+
+    document.querySelectorAll('#modeRow button').forEach((b) => {
+      b.disabled = !l.you.isHost || l.matchmade || l.phase !== 'picking';
+      b.className = l.mode === b.dataset.mode ? 'primary' : '';
+    });
+
+    $('startBtn').disabled = !l.you.isHost || l.phase !== 'picking';
+    $('rematchBtn').classList.toggle('hidden', l.phase !== 'results');
+    $('pickingWrap').classList.toggle('hidden', l.phase !== 'picking');
+    $('playingWrap').classList.toggle('hidden', l.phase !== 'countdown' && l.phase !== 'playing');
+    $('resultsWrap').classList.toggle('hidden', l.phase !== 'results');
+    $('lobbyCode').classList.toggle('hidden', l.phase === 'playing' || l.phase === 'countdown');
+
+    if (l.song) $('songName').textContent = l.song.name + ' (' + l.song.difficulty + ')';
+    if (l.phase === 'countdown') $('countdownText').textContent = `starting in ${(l.countdownMs / 1000).toFixed(1)}s`;
+    else if (l.phase === 'playing') $('countdownText').textContent = 'live — play the song, then submit your results';
+    $('submitBtn').disabled = l.phase !== 'playing' || !!(l.players.find((p) => p.id === l.you.id) || {}).stats;
+
+    $('songList').innerHTML = l.catalog
+      .filter((s) => !$('songSearch').value || s.name.toLowerCase().includes($('songSearch').value.toLowerCase()))
+      .map((s) => `<label><input type="checkbox" data-song="${esc(s.id)}" ${state.picks.has(s.id) ? 'checked' : ''} /> ${esc(s.name)}</label>`)
+      .join('');
+    $('pickCount').textContent = state.picks.size;
+    $('stateDump').textContent = JSON.stringify(l, null, 1).slice(0, 1400);
+
+    if (l.phase === 'results') {
+      const byId = Object.fromEntries(l.players.map((p) => [p.id, p]));
+      const iWon = l.winnerId === l.you.id;
+      $('resultTitle').textContent = l.winnerId ? (iWon ? 'YOU WIN' : `${byId[l.winnerId]?.name || 'Opponent'} WINS`) : 'DRAW';
+      $('resultTitle').className = 'big ' + (iWon ? 'win' : '');
+      $('resultTable').innerHTML =
+        '<tr><th>Player</th><th>Score</th><th>Accuracy</th><th>Misses</th><th>Failed</th><th></th></tr>' +
+        l.players
+          .map((p) => {
+            const s = p.stats || {};
+            return `<tr><td>${esc(p.name)}</td><td>${s.score ?? '—'}</td><td>${s.accuracy != null ? s.accuracy.toFixed(2) + '%' : '—'}</td><td>${s.misses ?? '—'}</td><td>${s.failed ? 'yes' : 'no'}</td><td class="${p.id === l.winnerId ? 'win' : ''}">${p.id === l.winnerId ? 'WINNER' : ''}</td></tr>`;
+          })
+          .join('');
+    }
+  }
+
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  // --- wiring -------------------------------------------------------------
+  $('serverUrl').value = location.origin;
+  $('playerName').value = 'Player ' + Math.floor(Math.random() * 900 + 100);
+  $('catalogCount').textContent = CATALOG.length;
+  $('connectBtn').onclick = connect;
+
+  $('hostBtn').onclick = () => api('/api/lobby/create', { songs: CATALOG }).then((j) => enterLobby(j.lobby)).catch((e) => log(e.message));
+  $('joinBtn').onclick = () =>
+    api('/api/lobby/join', { code: $('joinCode').value, songs: CATALOG })
+      .then((j) => enterLobby(j.lobby))
+      .catch((e) => setStatus('joinStatus', e.message, true));
+  $('findBtn').onclick = () =>
+    api('/api/match/find', { songs: CATALOG })
+      .then((j) => {
+        if (j.matched) enterLobby(j.lobby);
+        else setStatus('findStatus', 'Queued. Open another window and press Find too.');
+      })
+      .catch((e) => setStatus('findStatus', e.message, true));
+
+  $('leaveBtn').onclick = async () => {
+    await api('/api/lobby/leave').catch(() => {});
+    clearInterval(state.timer);
+    state.timer = null;
+    state.lobby = null;
+    location.reload();
+  };
+
+  $('readyBtn').onclick = () => api('/api/lobby/ready', { ready: !(state.lobby?.you.ready) }).then((j) => enterLobby(j.lobby)).catch((e) => log(e.message));
+  $('startBtn').onclick = () => api('/api/lobby/start').then((j) => enterLobby(j.lobby)).catch((e) => log(e.message));
+  $('rematchBtn').onclick = () => api('/api/lobby/rematch').then((j) => { state.picks.clear(); enterLobby(j.lobby); }).catch((e) => log(e.message));
+
+  document.querySelectorAll('#modeRow button').forEach((b) => {
+    b.onclick = () => api('/api/lobby/mode', { mode: b.dataset.mode }).then((j) => enterLobby(j.lobby)).catch((e) => log(e.message));
+  });
+
+  $('songList').onchange = (ev) => {
+    const id = ev.target.dataset.song;
+    if (!id) return;
+    if (ev.target.checked) state.picks.add(id);
+    else state.picks.delete(id);
+    api('/api/lobby/pick', { songs: [...state.picks] }).then((j) => { state.lobby = j.lobby; render(); }).catch((e) => log(e.message));
+  };
+
+  $('songSearch').oninput = render;
+
+  $('submitBtn').onclick = () =>
+    api('/api/lobby/result', {
+      score: Number($('rScore').value),
+      accuracy: Number($('rAcc').value),
+      misses: Number($('rMiss').value),
+      maxCombo: 100,
+      totalNotes: 120,
+      failed: $('rFailed').value === '1',
+    })
+      .then((j) => { state.lobby = j.lobby; render(); })
+      .catch((e) => log(e.message));
+
+  connect();
+})();
+</script>
+</body>
+</html>

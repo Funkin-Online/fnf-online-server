@@ -1,0 +1,16 @@
+# Render blueprint — deploy from the repo root.
+# Dashboard: New + > Blueprint > pick this repo. Render reads this file.
+services:
+  - type: web
+    name: fnf-online-server
+    runtime: node
+    plan: free
+    region: oregon
+    rootDir: server
+    buildCommand: npm install --omit=dev
+    startCommand: npm start
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: 22.11.0

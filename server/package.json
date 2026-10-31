@@ -1,0 +1,14 @@
+{
+  "name": "fnf-online-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "1v1 lobby + matchmaking server for Friday Night Funkin' Online",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test/smoke.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
