@@ -7,6 +7,11 @@
  * listens for on `window`. Arrow keys are both menu navigation and the four
  * note lanes in this engine, so one D-pad plays and navigates.
  *
+ * ARRANGE MODE — the "✥" button lets the player drag the D-pad, the action
+ * buttons and the number pad anywhere on screen, so each pair of thumbs can
+ * sit comfortably. Positions are saved per device (localStorage) and clamped
+ * to the viewport, including after a rotation. "Reset" puts them back.
+ *
  * Injected into mobile.html by tools/build-docs.js; nothing here touches the
  * desktop page.
  */
@@ -15,6 +20,8 @@
 
   if (window.__fnfTouchLoaded) return;
   window.__fnfTouchLoaded = true;
+
+  var STORAGE_KEY = 'fnfTouch.layout.v1';
 
   var CODE = {
     BACKSPACE: 8,
@@ -27,6 +34,9 @@
     DOWN: 40,
     ZERO: 48
   };
+
+  var arranging = false;
+  var groups = {};
 
   function dispatch(type, keyCode) {
     var event;
@@ -42,6 +52,109 @@
     Object.defineProperty(event, 'charCode', { get: function () { return type === 'keydown' ? keyCode : 0; } });
     window.dispatchEvent(event);
   }
+
+  // ---- saved layout ------------------------------------------------------
+
+  function loadLayout() {
+    try {
+      var raw = window.localStorage.getItem(STORAGE_KEY);
+      var parsed = raw ? JSON.parse(raw) : null;
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function saveLayout(layout) {
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(layout));
+    } catch (e) {}
+  }
+
+  function clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+  }
+
+  function place(element, position) {
+    if (!element || !position) return;
+    var width = element.offsetWidth || 60;
+    var height = element.offsetHeight || 60;
+    var x = clamp(Number(position.x) || 0, 0, Math.max(0, window.innerWidth - width));
+    var y = clamp(Number(position.y) || 0, 0, Math.max(0, window.innerHeight - height));
+    element.style.left = x + 'px';
+    element.style.top = y + 'px';
+    element.style.right = 'auto';
+    element.style.bottom = 'auto';
+  }
+
+  function positionOf(element) {
+    var rect = element.getBoundingClientRect();
+    return { x: Math.round(rect.left), y: Math.round(rect.top) };
+  }
+
+  function storeGroup(key, element) {
+    groups[key] = element;
+    var saved = loadLayout()[key];
+    if (saved) place(element, saved);
+  }
+
+  function persistGroup(key) {
+    var element = groups[key];
+    if (!element) return;
+    var layout = loadLayout();
+    layout[key] = positionOf(element);
+    saveLayout(layout);
+  }
+
+  function resetLayout() {
+    try {
+      window.localStorage.removeItem(STORAGE_KEY);
+    } catch (e) {}
+    for (var key in groups) {
+      var element = groups[key];
+      if (!element) continue;
+      element.style.left = '';
+      element.style.top = '';
+      element.style.right = '';
+      element.style.bottom = '';
+    }
+  }
+
+  // ---- dragging ----------------------------------------------------------
+
+  function makeDraggable(key, element) {
+    element.addEventListener('pointerdown', function (event) {
+      if (!arranging) return;
+      event.preventDefault();
+      event.stopPropagation();
+
+      var rect = element.getBoundingClientRect();
+      var offsetX = event.clientX - rect.left;
+      var offsetY = event.clientY - rect.top;
+      try {
+        element.setPointerCapture(event.pointerId);
+      } catch (e) {}
+
+      function move(moveEvent) {
+        moveEvent.preventDefault();
+        place(element, { x: moveEvent.clientX - offsetX, y: moveEvent.clientY - offsetY });
+      }
+
+      function finish(endEvent) {
+        if (endEvent) endEvent.preventDefault();
+        element.removeEventListener('pointermove', move);
+        element.removeEventListener('pointerup', finish);
+        element.removeEventListener('pointercancel', finish);
+        persistGroup(key);
+      }
+
+      element.addEventListener('pointermove', move);
+      element.addEventListener('pointerup', finish);
+      element.addEventListener('pointercancel', finish);
+    });
+  }
+
+  // ---- styles ------------------------------------------------------------
 
   var style = document.createElement('style');
   style.textContent = [
@@ -69,11 +182,26 @@
     'pointer-events:auto;display:flex;gap:8px}',
     '.fnf-touch__hidden .fnf-touch__pad,.fnf-touch__hidden .fnf-touch__actions,',
     '.fnf-touch__hidden .fnf-touch__digits{display:none!important}',
+    // arrange mode
+    '.fnf-touch--arrange .fnf-touch__pad,.fnf-touch--arrange .fnf-touch__actions,',
+    '.fnf-touch--arrange .fnf-touch__digits{outline:2px dashed rgba(255,217,61,.9);outline-offset:8px;',
+    'cursor:grab;touch-action:none}',
+    '.fnf-touch--arrange .fnf-touch__pad button,.fnf-touch--arrange .fnf-touch__actions button,',
+    '.fnf-touch--arrange .fnf-touch__digits button{pointer-events:none;opacity:.9}',
+    '.fnf-touch__bar{position:absolute;left:50%;transform:translateX(-50%);',
+    'top:max(10px,env(safe-area-inset-top));pointer-events:auto;display:none;align-items:center;gap:8px;',
+    'padding:8px 10px;border-radius:14px;background:rgba(16,16,20,.9);border:2px solid rgba(255,217,61,.8);',
+    'color:#f4f4f8;font-size:12px;letter-spacing:.06em;max-width:94vw}',
+    '.fnf-touch--arrange .fnf-touch__bar{display:flex}',
+    '.fnf-touch__bar span{line-height:1.35}',
+    '.fnf-touch__bar button{width:auto;padding:0 12px;height:40px;font-size:13px}',
     '@media (max-height:430px){.fnf-touch__pad{grid-template-columns:repeat(3,48px);',
     'grid-template-rows:repeat(3,48px)}.fnf-touch__pad button{width:48px;height:48px;font-size:20px}',
     '.fnf-touch__round{width:60px;height:60px}}'
   ].join('');
   document.head.appendChild(style);
+
+  // ---- controls ----------------------------------------------------------
 
   var root = document.createElement('div');
   root.className = 'fnf-touch';
@@ -84,14 +212,13 @@
     element.textContent = label;
     element.className = className || '';
     if (extra) element.setAttribute('aria-label', extra);
-    if (typeof keyCode === 'number') {
-      bind(element, keyCode);
-    }
+    if (typeof keyCode === 'number') bind(element, keyCode);
     return element;
   }
 
   function bind(element, keyCode) {
     function down(event) {
+      if (arranging) return;
       event.preventDefault();
       element.classList.add('is-held');
       dispatch('keydown', keyCode);
@@ -147,22 +274,71 @@
   digits.appendChild(closeDigits);
   root.appendChild(digits);
 
-  // Top-right: keypad toggle and a hide switch, so the pad never traps anyone.
+  // Arrange bar: drag hint, Done, Reset.
+  var bar = document.createElement('div');
+  bar.className = 'fnf-touch__bar';
+  var barText = document.createElement('span');
+  barText.textContent = 'Drag the arrows where your thumbs want them.';
+  var resetButton = button('Reset', null, '', 'Reset control positions');
+  resetButton.addEventListener('click', function () { resetLayout(); });
+  var doneButton = button('Done', null, '', 'Finish arranging');
+  doneButton.addEventListener('click', function () { setArranging(false); });
+  bar.appendChild(barText);
+  bar.appendChild(resetButton);
+  bar.appendChild(doneButton);
+  root.appendChild(bar);
+
+  // Top-right: keypad toggle, arrange, hide.
   var menu = document.createElement('div');
   menu.className = 'fnf-touch__menu';
   var padToggle = button('123', null, 'fnf-touch__small', 'Show numbers');
   padToggle.addEventListener('click', function () { digits.classList.toggle('is-open'); });
+  var arrangeToggle = button('✥', null, 'fnf-touch__small', 'Move the controls');
+  arrangeToggle.addEventListener('click', function () { setArranging(!arranging); });
   var hideToggle = button('⤢', null, 'fnf-touch__small', 'Hide or show the controls');
   hideToggle.addEventListener('click', function () { root.classList.toggle('fnf-touch__hidden'); });
   menu.appendChild(padToggle);
+  menu.appendChild(arrangeToggle);
   menu.appendChild(hideToggle);
   root.appendChild(menu);
 
+  function setArranging(next) {
+    arranging = next;
+    root.classList.toggle('fnf-touch--arrange', arranging);
+    arrangeToggle.classList.toggle('is-held', arranging);
+    if (arranging) {
+      digits.classList.add('is-open');
+      root.classList.remove('fnf-touch__hidden');
+    } else {
+      // Save wherever everything ended up.
+      for (var key in groups) persistGroup(key);
+    }
+  }
+
+  function layout() {
+    storeGroup('pad', pad);
+    storeGroup('actions', actions);
+    storeGroup('digits', digits);
+    makeDraggable('pad', pad);
+    makeDraggable('actions', actions);
+    makeDraggable('digits', digits);
+  }
+
   function mount() {
     (document.body || document.documentElement).appendChild(root);
+    layout();
   }
+
   if (document.body) mount();
   else document.addEventListener('DOMContentLoaded', mount);
+
+  // Keep saved controls on screen when the phone rotates or the window resizes.
+  window.addEventListener('resize', function () {
+    var saved = loadLayout();
+    for (var key in groups) {
+      if (groups[key] && saved[key]) place(groups[key], saved[key]);
+    }
+  });
 
   // The game canvas should not scroll or zoom under a thumb.
   document.addEventListener('gesturestart', function (event) { event.preventDefault(); });
