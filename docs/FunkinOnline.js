@@ -172192,6 +172192,94 @@ funkin_modding_module_ScriptedModule.prototype = $extend(funkin_modding_module_M
 	}
 	,__class__: funkin_modding_module_ScriptedModule
 });
+var funkin_online_NameEditor = function() {
+	this.draft = "";
+	this.active = false;
+};
+$hxClasses["funkin.online.NameEditor"] = funkin_online_NameEditor;
+funkin_online_NameEditor.__name__ = "funkin.online.NameEditor";
+funkin_online_NameEditor.prototype = {
+	active: null
+	,draft: null
+	,onSave: null
+	,onCancel: null
+	,onChange: null
+	,begin: function(start) {
+		this.active = true;
+		this.draft = start == null ? "" : HxOverrides.substr(start,0,funkin_online_NameEditor.MAX_LENGTH);
+		this.notify();
+	}
+	,stop: function() {
+		this.active = false;
+		this.notify();
+	}
+	,notify: function() {
+		if(this.onChange != null) {
+			this.onChange();
+		}
+	}
+	,update: function() {
+		if(!this.active) {
+			return false;
+		}
+		if(flixel_FlxG.keys.checkKeyArrayState([13],2)) {
+			var finished = this.draft;
+			this.active = false;
+			this.notify();
+			if(this.onSave != null) {
+				this.onSave(finished);
+			}
+			return true;
+		}
+		if(flixel_FlxG.keys.checkKeyArrayState([27],2)) {
+			this.active = false;
+			this.notify();
+			if(this.onCancel != null) {
+				this.onCancel();
+			}
+			return true;
+		}
+		if(flixel_FlxG.keys.checkKeyArrayState([8],2) && this.draft.length > 0) {
+			this.draft = HxOverrides.substr(this.draft,0,this.draft.length - 1);
+			this.notify();
+			return true;
+		}
+		if(this.draft.length < funkin_online_NameEditor.MAX_LENGTH) {
+			var _g = 0;
+			var _g1 = funkin_online_NameEditor.LETTER_KEYS.length;
+			while(_g < _g1) {
+				var i = _g++;
+				if(flixel_FlxG.keys.checkKeyArrayState([funkin_online_NameEditor.LETTER_KEYS[i]],2)) {
+					this.draft += funkin_online_NameEditor.LETTERS.charAt(i);
+					this.notify();
+					return true;
+				}
+			}
+			var _g = 0;
+			var _g1 = funkin_online_NameEditor.DIGIT_KEYS.length;
+			while(_g < _g1) {
+				var i = _g++;
+				if(flixel_FlxG.keys.checkKeyArrayState([funkin_online_NameEditor.DIGIT_KEYS[i]],2)) {
+					this.draft += "" + i;
+					this.notify();
+					return true;
+				}
+			}
+			if(flixel_FlxG.keys.checkKeyArrayState([32],2)) {
+				this.draft += " ";
+				this.notify();
+				return true;
+			}
+			if(flixel_FlxG.keys.checkKeyArrayState([189],2)) {
+				this.draft += "_";
+				this.notify();
+				return true;
+			}
+		}
+		return true;
+	}
+	,__class__: funkin_online_NameEditor
+};
 var funkin_online_OnlineClient = function() { };
 $hxClasses["funkin.online.OnlineClient"] = funkin_online_OnlineClient;
 funkin_online_OnlineClient.__name__ = "funkin.online.OnlineClient";
@@ -172697,8 +172785,7 @@ var funkin_online_OnlineLobbyState = function() {
 	this.scroll = 0;
 	this.selection = 0;
 	this.songRows = [];
-	this.renameDraft = "";
-	this.renaming = false;
+	this.nameEditor = new funkin_online_NameEditor();
 	this.lobby = null;
 	funkin_ui_MusicBeatState.call(this);
 };
@@ -172713,8 +172800,8 @@ funkin_online_OnlineLobbyState.prototype = $extend(funkin_ui_MusicBeatState.prot
 	,modeText: null
 	,diffText: null
 	,phaseText: null
-	,renaming: null
-	,renameDraft: null
+	,nameEditor: null
+	,nameText: null
 	,searchText: null
 	,statusText: null
 	,hintText: null
@@ -172798,6 +172885,13 @@ funkin_online_OnlineLobbyState.prototype = $extend(funkin_ui_MusicBeatState.prot
 		this.statusText.set_y(470);
 		this.statusText.set_fieldWidth(512);
 		this.add(this.statusText);
+		this.nameText = funkin_online_OnlineTheme.text(16,-7861);
+		this.nameText.set_x(712);
+		this.nameText.set_y(500);
+		this.nameText.set_fieldWidth(512);
+		this.add(this.nameText);
+		this.wireNameEditor();
+		this.refreshNameLine();
 		this.hintText = funkin_online_OnlineTheme.text(15,-6653256);
 		this.hintText.set_x(712);
 		this.hintText.set_y(520);
@@ -172828,6 +172922,7 @@ funkin_online_OnlineLobbyState.prototype = $extend(funkin_ui_MusicBeatState.prot
 			this.poll();
 		}
 		this.handleInput();
+		this.refreshNameLine();
 		if(this.lobby == null) {
 			return;
 		}
@@ -173316,105 +173411,62 @@ funkin_online_OnlineLobbyState.prototype = $extend(funkin_ui_MusicBeatState.prot
 			}
 		});
 	}
-	,renameChar: function(keyName) {
-		if(keyName == "SPACE") {
-			return " ";
-		}
-		if(keyName == "MINUS") {
-			return "_";
-		}
-		if(keyName == "ZERO") {
-			return "0";
-		}
-		if(keyName == "ONE") {
-			return "1";
-		}
-		if(keyName == "TWO") {
-			return "2";
-		}
-		if(keyName == "THREE") {
-			return "3";
-		}
-		if(keyName == "FOUR") {
-			return "4";
-		}
-		if(keyName == "FIVE") {
-			return "5";
-		}
-		if(keyName == "SIX") {
-			return "6";
-		}
-		if(keyName == "SEVEN") {
-			return "7";
-		}
-		if(keyName == "EIGHT") {
-			return "8";
-		}
-		if(keyName == "NINE") {
-			return "9";
-		}
-		return keyName;
-	}
 	,handleRenameKeys: function() {
-		var _gthis = this;
-		if(!this.renaming) {
-			var _this = flixel_FlxG.keys.justPressed;
-			if(_this.keyManager.checkStatusUnsafe(78,_this.status) && this.lobby != null && Std.string(Reflect.field(this.lobby,"phase")) == "picking") {
-				this.renaming = true;
-				this.renameDraft = funkin_online_OnlineSession.myName();
-				this.statusText.set_text("Name: " + this.renameDraft + "   (ENTER save, ESC cancel)");
-				this.playTick();
-				return true;
-			}
+		if(this.nameEditor.active) {
+			return this.nameEditor.update();
+		}
+		if(this.lobby == null) {
 			return false;
 		}
-		var _this = flixel_FlxG.keys.justPressed;
-		if(_this.keyManager.checkStatusUnsafe(13,_this.status)) {
-			this.renaming = false;
-			var wanted = StringTools.trim(this.renameDraft);
+		var tmp = Reflect.field(this.lobby,"phase");
+		var phase = Std.string(tmp != null ? tmp : "picking");
+		if(phase != "picking") {
+			return false;
+		}
+		if(flixel_FlxG.keys.checkKeyArrayState([78],2)) {
+			this.nameEditor.begin(funkin_online_OnlineSession.myName());
+			this.playTick();
+			return true;
+		}
+		return false;
+	}
+	,wireNameEditor: function() {
+		var _gthis = this;
+		this.nameEditor.onChange = function() {
+			_gthis.refreshNameLine();
+		};
+		this.nameEditor.onSave = function(name) {
+			var wanted = StringTools.trim(name);
 			if(wanted.length == 0) {
 				wanted = funkin_online_OnlineSession.myName();
 			}
-			if(wanted.length > 16) {
-				wanted = HxOverrides.substr(wanted,0,16);
-			}
-			this.statusText.set_text("Saving name...");
+			_gthis.statusText.set_text("Saving name...");
 			funkin_online_OnlineSession.rename(wanted,function(applied) {
 				if(_gthis.gone) {
 					return;
 				}
 				_gthis.statusText.set_text("Name set to " + applied + ".");
 				_gthis.syncLobby();
+				_gthis.refreshNameLine();
 			});
-			this.playConfirm();
-			return true;
+			_gthis.playConfirm();
+		};
+		this.nameEditor.onCancel = function() {
+			_gthis.statusText.set_text("Name unchanged.");
+			_gthis.playCancel();
+		};
+	}
+	,refreshNameLine: function() {
+		if(this.nameText == null) {
+			return;
 		}
-		var _this = flixel_FlxG.keys.justPressed;
-		if(_this.keyManager.checkStatusUnsafe(27,_this.status)) {
-			this.renaming = false;
-			this.statusText.set_text("Name unchanged.");
-			this.playCancel();
-			return true;
+		if(this.nameEditor.active) {
+			this.nameText.set_text("NAME: " + this.nameEditor.draft + "_    ENTER save / ESC cancel");
+			this.nameText.set_color(-11796571);
+		} else {
+			this.nameText.set_text("NAME: " + funkin_online_OnlineSession.myName() + "    press N to change");
+			this.nameText.set_color(-7861);
 		}
-		var _this = flixel_FlxG.keys.justPressed;
-		if(_this.keyManager.checkStatusUnsafe(8,_this.status) && this.renameDraft.length > 0) {
-			this.renameDraft = HxOverrides.substr(this.renameDraft,0,this.renameDraft.length - 1);
-			this.statusText.set_text("Name: " + this.renameDraft + "   (ENTER save, ESC cancel)");
-			return true;
-		}
-		var _g = 0;
-		var _g1 = funkin_online_OnlineLobbyState.RENAME_KEYS;
-		while(_g < _g1.length) {
-			var key = _g1[_g];
-			++_g;
-			if(Reflect.field(flixel_FlxG.keys.justPressed,key) == true && this.renameDraft.length < 16) {
-				var ch = this.renameChar(key);
-				this.renameDraft += key == "SPACE" && this.renameDraft.length == 0 ? "" : ch;
-				this.statusText.set_text("Name: " + this.renameDraft + "   (ENTER save, ESC cancel)");
-				return true;
-			}
-		}
-		return true;
 	}
 	,startMatch: function() {
 		if(this.started) {
@@ -173445,7 +173497,7 @@ funkin_online_OnlineLobbyState.prototype = $extend(funkin_ui_MusicBeatState.prot
 		funkin_online_OnlinePerf.apply();
 		funkin_online_OnlineSession.lastError = null;
 		var chart = funkin_online_OnlineSongs.resolveChart(songId,funkin_online_OnlineSession.difficulty(),funkin_online_OnlineSession.variation());
-		haxe_Log.trace("[online] starting " + songId + " (" + chart.difficulty + "/" + chart.variation + ") as " + funkin_online_OnlineSession.role(),{ fileName : "source/funkin/online/OnlineLobbyState.hx", lineNumber : 779, className : "funkin.online.OnlineLobbyState", methodName : "startMatch"});
+		haxe_Log.trace("[online] starting " + songId + " (" + chart.difficulty + "/" + chart.variation + ") as " + funkin_online_OnlineSession.role(),{ fileName : "source/funkin/online/OnlineLobbyState.hx", lineNumber : 768, className : "funkin.online.OnlineLobbyState", methodName : "startMatch"});
 		flixel_addons_transition_FlxTransitionableState.skipNextTransIn = true;
 		flixel_addons_transition_FlxTransitionableState.skipNextTransOut = true;
 		funkin_ui_transition_LoadingState.loadPlayState({ targetSong : target, targetDifficulty : chart.difficulty, targetVariation : chart.variation, practiceMode : false, minimalMode : false, botPlayMode : false},true);
@@ -442157,6 +442209,10 @@ funkin_modding_events_ScriptEventType.DIALOGUE_END = "DIALOGUE_END";
 funkin_modding_module_ModuleHandler.moduleCache = new haxe_ds_StringMap();
 funkin_modding_module_ModuleHandler.modulePriorityOrder = [];
 funkin_modding_module_ScriptedModule._isHScriptedClass = true;
+funkin_online_NameEditor.LETTER_KEYS = [65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90];
+funkin_online_NameEditor.DIGIT_KEYS = [48,49,50,51,52,53,54,55,56,57];
+funkin_online_NameEditor.LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+funkin_online_NameEditor.MAX_LENGTH = 16;
 funkin_online_OnlineClient.token = null;
 funkin_online_OnlineClient.playerId = null;
 funkin_online_OnlineClient.playerName = "Player";
@@ -442174,7 +442230,6 @@ funkin_online_OnlineLobbyState.DIFFICULTIES = ["easy","normal","hard","erect","n
 funkin_online_OnlineLobbyState.VARIATIONS = ["default","pico","erect","bf"];
 funkin_online_OnlineLobbyState.LETTER_KEYS = [65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90];
 funkin_online_OnlineLobbyState.LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-funkin_online_OnlineLobbyState.RENAME_KEYS = ["A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z","ZERO","ONE","TWO","THREE","FOUR","FIVE","SIX","SEVEN","EIGHT","NINE","SPACE","MINUS"];
 funkin_online_OnlineMenuState.DIGIT_KEYS = [48,49,50,51,52,53,54,55,56,57];
 funkin_online_OnlineMenuState.OPTIONS = ["HOST GAME","JOIN WITH CODE","FIND MATCH","BACK"];
 funkin_online_OnlinePerf.lowQuality = false;

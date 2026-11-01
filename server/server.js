@@ -114,7 +114,8 @@ function tryServeFile(res, filePath, headOnly = false) {
       'content-type': contentType,
       'content-length': stat.size,
       'access-control-allow-origin': '*',
-      'cache-control': ext === '.html' ? 'no-cache' : 'public, max-age=3600',
+      // Always revalidate: a cached 16 MB game bundle hides every new build.
+      'cache-control': 'no-cache, must-revalidate',
     });
     if (headOnly) res.end();
     else fs.createReadStream(filePath).pipe(res);
