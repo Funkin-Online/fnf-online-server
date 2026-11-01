@@ -172785,6 +172785,7 @@ var funkin_online_OnlineLobbyState = function() {
 	this.scroll = 0;
 	this.selection = 0;
 	this.songRows = [];
+	this.startedAt = 0;
 	this.nameEditor = new funkin_online_NameEditor();
 	this.lobby = null;
 	funkin_ui_MusicBeatState.call(this);
@@ -172801,6 +172802,7 @@ funkin_online_OnlineLobbyState.prototype = $extend(funkin_ui_MusicBeatState.prot
 	,diffText: null
 	,phaseText: null
 	,nameEditor: null
+	,startedAt: null
 	,nameText: null
 	,searchText: null
 	,statusText: null
@@ -172943,6 +172945,11 @@ funkin_online_OnlineLobbyState.prototype = $extend(funkin_ui_MusicBeatState.prot
 					flixel_FlxG.log.advanced("`onOutroComplete` was called after the state was switched. This will be ignored",flixel_system_debug_log_LogStyle.WARNING,true,{ fileName : "flixel/FlxG.hx", lineNumber : 395, className : "flixel.FlxG", methodName : "switchState"});
 				}
 			});
+		}
+		if(this.started && this.startedAt > 0 && HxOverrides.now() / 1000 - this.startedAt > 6) {
+			this.started = false;
+			this.startedAt = 0;
+			this.statusText.set_text("Song did not open — retrying...");
 		}
 	}
 	,destroy: function() {
@@ -173468,6 +173475,32 @@ funkin_online_OnlineLobbyState.prototype = $extend(funkin_ui_MusicBeatState.prot
 			this.nameText.set_color(-7861);
 		}
 	}
+	,anyDifficultyOf: function(songId) {
+		var song = null;
+		try {
+			song = funkin_data_song_SongRegistry.get_instance().fetchEntry(songId);
+		} catch( _g ) {
+			haxe_NativeStackTrace.lastError = _g;
+			return null;
+		}
+		if(song == null) {
+			return null;
+		}
+		var _g = 0;
+		var _g1 = funkin_online_OnlineLobbyState.DIFFICULTIES;
+		while(_g < _g1.length) {
+			var diff = _g1[_g];
+			++_g;
+			try {
+				if(song.getDifficulty(diff,funkin_online_OnlineLobbyState.VARIATIONS[0]) != null) {
+					return song;
+				}
+			} catch( _g2 ) {
+				haxe_NativeStackTrace.lastError = _g2;
+			}
+		}
+		return song;
+	}
 	,startMatch: function() {
 		if(this.started) {
 			return;
@@ -173485,11 +173518,15 @@ funkin_online_OnlineLobbyState.prototype = $extend(funkin_ui_MusicBeatState.prot
 			target = null;
 		}
 		if(target == null) {
+			target = this.anyDifficultyOf(songId);
+		}
+		if(target == null) {
 			this.statusText.set_text("You do not have the song \"" + songId + "\" installed.");
 			this.started = false;
 			return;
 		}
 		this.started = true;
+		this.startedAt = HxOverrides.now() / 1000;
 		funkin_online_OnlineSession.inMatch = true;
 		funkin_online_OnlineSession.songId = songId;
 		funkin_online_OnlineSession.submitted = false;
@@ -173497,10 +173534,18 @@ funkin_online_OnlineLobbyState.prototype = $extend(funkin_ui_MusicBeatState.prot
 		funkin_online_OnlinePerf.apply();
 		funkin_online_OnlineSession.lastError = null;
 		var chart = funkin_online_OnlineSongs.resolveChart(songId,funkin_online_OnlineSession.difficulty(),funkin_online_OnlineSession.variation());
-		haxe_Log.trace("[online] starting " + songId + " (" + chart.difficulty + "/" + chart.variation + ") as " + funkin_online_OnlineSession.role(),{ fileName : "source/funkin/online/OnlineLobbyState.hx", lineNumber : 768, className : "funkin.online.OnlineLobbyState", methodName : "startMatch"});
+		haxe_Log.trace("[online] starting " + songId + " (" + chart.difficulty + "/" + chart.variation + ") as " + funkin_online_OnlineSession.role(),{ fileName : "source/funkin/online/OnlineLobbyState.hx", lineNumber : 814, className : "funkin.online.OnlineLobbyState", methodName : "startMatch"});
 		flixel_addons_transition_FlxTransitionableState.skipNextTransIn = true;
 		flixel_addons_transition_FlxTransitionableState.skipNextTransOut = true;
-		funkin_ui_transition_LoadingState.loadPlayState({ targetSong : target, targetDifficulty : chart.difficulty, targetVariation : chart.variation, practiceMode : false, minimalMode : false, botPlayMode : false},true);
+		try {
+			funkin_ui_transition_LoadingState.loadPlayState({ targetSong : target, targetDifficulty : chart.difficulty, targetVariation : chart.variation, practiceMode : false, minimalMode : false, botPlayMode : false},true);
+		} catch( _g ) {
+			haxe_NativeStackTrace.lastError = _g;
+			var e = haxe_Exception.caught(_g).unwrap();
+			this.started = false;
+			this.startedAt = 0;
+			this.statusText.set_text("Could not start the song: " + Std.string(e));
+		}
 	}
 	,leaveLobby: function() {
 		if(this.leaving) {
