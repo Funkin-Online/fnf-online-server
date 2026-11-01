@@ -32,6 +32,7 @@ const PLAYER_STALE_MS = 5 * 60 * 1000; // no poll for 5 minutes -> dropped
 const PLAYER_DISCONNECTED_MS = 30 * 1000; // shown as "reconnecting"
 const QUEUE_STALE_MS = 60 * 1000; // auto-cancel a stale queue entry
 const START_DELAY_MS = 5000; // wait after both sides load, before the song
+const LOAD_TIMEOUT_MS = 12000; // start anyway if a client never reports loaded
 const MAX_JSON_BYTES = 256 * 1024;
 const MAX_SONGS = 500;
 const MODES = ['score', 'accuracy', 'misses'];
@@ -369,6 +370,7 @@ function startSong(lobby, forced) {
   lobby.phase = 'loading';
   lobby.startAt = 0;
   lobby.loaded = new Set();
+  lobby.loadingSince = now();
   lobby.results.clear();
   lobby.live.clear();
   lobby.winnerId = null;
@@ -396,7 +398,12 @@ function allSidesLoaded(lobby) {
 /** loading -> countdown, but only once every client has the song loaded. */
 function advanceLoading(lobby) {
   if (lobby.phase !== 'loading') return;
-  if (!allSidesLoaded(lobby)) return;
+
+  // A player who never reports (closed tab, dead phone, dropped request) must
+  // not pin the other player on a loading screen.
+  const waited = now() - (lobby.loadingSince || now());
+  if (!allSidesLoaded(lobby) && waited < LOAD_TIMEOUT_MS) return;
+
   lobby.phase = 'countdown';
   lobby.startAt = now() + START_DELAY_MS;
   lobby.updatedAt = now();

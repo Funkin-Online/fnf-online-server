@@ -174499,6 +174499,19 @@ funkin_online_OnlineSession.reportLoaded = function() {
 			funkin_online_OnlineSession.lobby = next;
 		}
 	},function(_) {
+		funkin_online_OnlineSession.loadedReported = false;
+	});
+};
+funkin_online_OnlineSession.pollGate = function() {
+	if(!funkin_online_OnlineSession.inMatch) {
+		return;
+	}
+	funkin_online_OnlineClient.call("/api/lobby/state",{ },function(res) {
+		var next = Reflect.field(res,"lobby");
+		if(next != null) {
+			funkin_online_OnlineSession.lobby = next;
+		}
+	},function(_) {
 	});
 };
 funkin_online_OnlineSession.startGateOpen = function() {
@@ -174513,7 +174526,7 @@ funkin_online_OnlineSession.startGateOpen = function() {
 	if(phase == "countdown" || phase == "playing" || phase == "results") {
 		return true;
 	}
-	return HxOverrides.now() / 1000 - funkin_online_OnlineSession.gateStartedAt > 45;
+	return HxOverrides.now() / 1000 - funkin_online_OnlineSession.gateStartedAt > 20;
 };
 funkin_online_OnlineSession.role = function() {
 	var me = funkin_online_OnlineSession.you();
@@ -174720,7 +174733,7 @@ funkin_online_OnlineSession.finishMatch = function(score,tallies,failed) {
 		funkin_online_OnlineClient.call("/api/lobby/result",stats,function(_) {
 		},function(error) {
 			funkin_online_OnlineSession.lastError = error;
-			haxe_Log.trace("[online] result upload failed: " + error,{ fileName : "source/funkin/online/OnlineSession.hx", lineNumber : 343, className : "funkin.online.OnlineSession", methodName : "finishMatch"});
+			haxe_Log.trace("[online] result upload failed: " + error,{ fileName : "source/funkin/online/OnlineSession.hx", lineNumber : 362, className : "funkin.online.OnlineSession", methodName : "finishMatch"});
 		});
 	}
 	if(flixel_FlxG.game._state != null) {
@@ -177432,15 +177445,16 @@ funkin_play_PlayState.prototype = $extend(funkin_ui_MusicBeatSubState.prototype,
 	,startCountdown: function() {
 		var _gthis = this;
 		if(funkin_online_OnlineSession.inMatch && !funkin_online_OnlineSession.startGateOpen()) {
+			funkin_online_OnlineSession.pollGate();
 			funkin_online_OnlineSession.reportLoaded();
 			if(!this.onlineStartPending) {
 				this.onlineStartPending = true;
 				haxe_Timer.delay(function() {
 					_gthis.onlineStartPending = false;
-					if(_gthis.startingSong && !_gthis.isInCountdown) {
+					if(_gthis.startingSong) {
 						_gthis.startCountdown();
 					}
-				},250);
+				},400);
 			}
 			return;
 		}
@@ -177493,7 +177507,7 @@ funkin_play_PlayState.prototype = $extend(funkin_ui_MusicBeatSubState.prototype,
 			}
 		}
 		if(flixel_FlxG.sound.music == null) {
-			flixel_FlxG.log.advanced("PlayState failed to initialize instrumental!",flixel_system_debug_log_LogStyle.ERROR,true,{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 2741, className : "funkin.play.PlayState", methodName : "startSong"});
+			flixel_FlxG.log.advanced("PlayState failed to initialize instrumental!",flixel_system_debug_log_LogStyle.ERROR,true,{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 2744, className : "funkin.play.PlayState", methodName : "startSong"});
 			return;
 		}
 		flixel_FlxG.sound.music.onComplete = function() {
@@ -177543,7 +177557,7 @@ funkin_play_PlayState.prototype = $extend(funkin_ui_MusicBeatSubState.prototype,
 			return;
 		}
 		var timeToPlayAt = Math.min(flixel_FlxG.sound.music._length - 1,Math.max(Math.min(funkin_Conductor.get_instance().get_combinedOffset(),0),funkin_Conductor.get_instance().songPosition) - funkin_Conductor.get_instance().get_combinedOffset());
-		haxe_Log.trace("Resyncing vocals to " + timeToPlayAt,{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 2825, className : "funkin.play.PlayState", methodName : "resyncVocals"});
+		haxe_Log.trace("Resyncing vocals to " + timeToPlayAt,{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 2828, className : "funkin.play.PlayState", methodName : "resyncVocals"});
 		flixel_FlxG.sound.music.pause();
 		this.vocals.pause();
 		flixel_FlxG.sound.music.set_time(timeToPlayAt);
@@ -177706,7 +177720,7 @@ funkin_play_PlayState.prototype = $extend(funkin_ui_MusicBeatSubState.prototype,
 				holdNote.handledMiss = true;
 				if(!this.isBotPlayMode && holdNote.scoreable) {
 					if(holdNote.sustainLength > funkin_util_Constants.HOLD_DROP_PENALTY_THRESHOLD_MS) {
-						haxe_Log.trace("Player dropped a hold note, penalizing... (has hit: " + (holdNote.hitNote == null ? "null" : "" + holdNote.hitNote) + ")",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 3063, className : "funkin.play.PlayState", methodName : "processNotes"});
+						haxe_Log.trace("Player dropped a hold note, penalizing... (has hit: " + (holdNote.hitNote == null ? "null" : "" + holdNote.hitNote) + ")",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 3066, className : "funkin.play.PlayState", methodName : "processNotes"});
 						var remainingLengthSec = holdNote.sustainLength / funkin_util_Constants.MS_PER_SEC;
 						var healthChangeUncapped = remainingLengthSec * funkin_util_Constants.HEALTH_HOLD_DROP_PENALTY_PER_SECOND;
 						var healthChangeMax = funkin_util_Constants.HEALTH_HOLD_DROP_PENALTY_MAX - (holdNote.hitNote ? -funkin_util_Constants.HEALTH_MISS_PENALTY : 0);
@@ -177717,7 +177731,7 @@ funkin_play_PlayState.prototype = $extend(funkin_ui_MusicBeatSubState.prototype,
 						if(event.eventCanceled) {
 							continue;
 						}
-						haxe_Log.trace("Penalizing score by " + event.score + " and health by " + event.healthChange + " for dropping hold note (is combo break: " + (event.isComboBreak == null ? "null" : "" + event.isComboBreak) + ")!",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 3080, className : "funkin.play.PlayState", methodName : "processNotes"});
+						haxe_Log.trace("Penalizing score by " + event.score + " and health by " + event.healthChange + " for dropping hold note (is combo break: " + (event.isComboBreak == null ? "null" : "" + event.isComboBreak) + ")!",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 3083, className : "funkin.play.PlayState", methodName : "processNotes"});
 						this.applyScore(event.score,"",event.healthChange,event.isComboBreak);
 						if(event.playSound) {
 							if(this.vocals != null) {
@@ -177729,7 +177743,7 @@ funkin_play_PlayState.prototype = $extend(funkin_ui_MusicBeatSubState.prototype,
 							funkin_audio_FunkinSound.playOnce(funkin_Paths.soundRandom("missnote",1,3),flixel_FlxG.random.float(0.5,0.6));
 						}
 					} else {
-						haxe_Log.trace("Hold note too short, not penalizing...",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 3096, className : "funkin.play.PlayState", methodName : "processNotes"});
+						haxe_Log.trace("Hold note too short, not penalizing...",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 3099, className : "funkin.play.PlayState", methodName : "processNotes"});
 					}
 				}
 			}
@@ -177782,10 +177796,10 @@ funkin_play_PlayState.prototype = $extend(funkin_ui_MusicBeatSubState.prototype,
 			if(notesInDirection.length == 0) {
 				this.ghostNoteMiss(input.noteDirection,notesInRange.length > 0);
 				this.playerStrumline.playPress(input.noteDirection);
-				haxe_Log.trace("PENALTY Score: " + this.songScore,{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 3171, className : "funkin.play.PlayState", methodName : "processInputQueue"});
+				haxe_Log.trace("PENALTY Score: " + this.songScore,{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 3174, className : "funkin.play.PlayState", methodName : "processInputQueue"});
 			} else if(notesInDirection.length == 0) {
 				this.playerStrumline.playPress(input.noteDirection);
-				haxe_Log.trace("NO PENALTY Score: " + this.songScore,{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 3179, className : "funkin.play.PlayState", methodName : "processInputQueue"});
+				haxe_Log.trace("NO PENALTY Score: " + this.songScore,{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 3182, className : "funkin.play.PlayState", methodName : "processInputQueue"});
 			} else {
 				var targetNote = thx_Arrays.find(notesInDirection,function(note) {
 					return !note.lowPriority;
@@ -178007,7 +178021,7 @@ funkin_play_PlayState.prototype = $extend(funkin_ui_MusicBeatSubState.prototype,
 	}
 	,popUpScore: function(daRating,combo) {
 		if(daRating == "miss") {
-			flixel_FlxG.log.advanced("popUpScore judged a note as a miss!",flixel_system_debug_log_LogStyle.WARNING,true,{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 3474, className : "funkin.play.PlayState", methodName : "popUpScore"});
+			flixel_FlxG.log.advanced("popUpScore judged a note as a miss!",flixel_system_debug_log_LogStyle.WARNING,true,{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 3477, className : "funkin.play.PlayState", methodName : "popUpScore"});
 			return;
 		}
 		if(combo == null) {
@@ -178136,7 +178150,7 @@ funkin_play_PlayState.prototype = $extend(funkin_ui_MusicBeatSubState.prototype,
 				}
 			} else {
 				var difficulty = "";
-				haxe_Log.trace("Loading next song (" + targetSongId + " : " + difficulty + ")",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 3738, className : "funkin.play.PlayState", methodName : "endSong"});
+				haxe_Log.trace("Loading next song (" + targetSongId + " : " + difficulty + ")",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 3741, className : "funkin.play.PlayState", methodName : "endSong"});
 				flixel_addons_transition_FlxTransitionableState.skipNextTransIn = true;
 				flixel_addons_transition_FlxTransitionableState.skipNextTransOut = true;
 				var tmp = flixel_FlxG.sound.music;
@@ -178254,7 +178268,7 @@ funkin_play_PlayState.prototype = $extend(funkin_ui_MusicBeatSubState.prototype,
 	}
 	,zoomIntoResultsScreen: function(isNewHighscore,prevScoreData) {
 		var _gthis = this;
-		haxe_Log.trace("WENT TO RESULTS SCREEN!",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 3901, className : "funkin.play.PlayState", methodName : "zoomIntoResultsScreen"});
+		haxe_Log.trace("WENT TO RESULTS SCREEN!",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 3904, className : "funkin.play.PlayState", methodName : "zoomIntoResultsScreen"});
 		this.cameraZoomRate = 0;
 		this.cancelAllCameraTweens();
 		this.cancelScrollSpeedTweens();
@@ -178301,7 +178315,7 @@ funkin_play_PlayState.prototype = $extend(funkin_ui_MusicBeatSubState.prototype,
 		if(tmp != null) {
 			currentChart = tmp;
 		} else {
-			haxe_Log.trace("ERROR: Cannot move to results screen with a null chart.",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 3979, className : "funkin.play.PlayState", methodName : "moveToResultsScreen"});
+			haxe_Log.trace("ERROR: Cannot move to results screen with a null chart.",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 3982, className : "funkin.play.PlayState", methodName : "moveToResultsScreen"});
 			return;
 		}
 		this.persistentUpdate = false;
