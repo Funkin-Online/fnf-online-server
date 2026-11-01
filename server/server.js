@@ -286,6 +286,7 @@ function createLobby(host, { matchmade = false } = {}) {
     playerIds: [host.id],
     picks: new Map(), // playerId -> Set(songId)
     ready: new Map(), // playerId -> bool
+    loaded: new Set(), // playerId -> true once their client has the song loaded
     song: null,
     startAt: 0,
     results: new Map(), // playerId -> stats
@@ -359,8 +360,11 @@ function startSong(lobby, forced) {
     difficulty: lobby.difficulty || 'normal',
     variation: lobby.variation || 'default',
   };
-  lobby.phase = 'countdown';
-  lobby.startAt = now() + START_DELAY_MS;
+  // Do not start the clock yet: a client that is still preloading the chart
+  // would join the song mid-way. Wait for every side to report loaded.
+  lobby.phase = 'loading';
+  lobby.startAt = 0;
+  lobby.loaded = new Set();
   lobby.results.clear();
   lobby.live.clear();
   lobby.winnerId = null;
@@ -377,6 +381,21 @@ function maybeAutoStart(lobby) {
   if (!everyoneReady) return;
   if (pickPool(lobby).length === 0) return;
   startSong(lobby, false);
+}
+
+function allSidesLoaded(lobby) {
+  const list = lobbyPlayers(lobby);
+  if (list.length < 2) return false;
+  return list.every((p) => lobby.loaded && lobby.loaded.has(p.id));
+}
+
+/** loading -> countdown, but only once every client has the song loaded. */
+function advanceLoading(lobby) {
+  if (lobby.phase !== 'loading') return;
+  if (!allSidesLoaded(lobby)) return;
+  lobby.phase = 'countdown';
+  lobby.startAt = now() + START_DELAY_MS;
+  lobby.updatedAt = now();
 }
 
 function compareResults(lobby) {
@@ -436,6 +455,7 @@ function snapshot(lobby, viewer) {
       name: p.name,
       isHost: p.id === lobby.hostId,
       ready: !!lobby.ready.get(p.id),
+      loaded: !!(lobby.loaded && lobby.loaded.has(p.id)),
       picks: [...(lobby.picks.get(p.id) ?? [])],
       connected: now() - p.lastSeen < PLAYER_DISCONNECTED_MS,
       stats: lobby.results.get(p.id) ?? null,
@@ -468,6 +488,7 @@ function roomFor(player) {
  * stuck in "countdown" just because the reaper timer has not ticked yet.
  */
 function advanceLobby(lobby) {
+  advanceLoading(lobby);
   if (lobby.phase === 'countdown' && now() >= lobby.startAt) {
     lobby.phase = 'playing';
     lobby.updatedAt = now();
@@ -505,6 +526,7 @@ function tick() {
     if (lobby.playerIds.length === 0 && elapsed > LOBBY_IDLE_MS) lobbies.delete(code);
     else if (elapsed > LOBBY_IDLE_MS * 6) lobbies.delete(code);
     // Countdown finished -> go live.
+    advanceLoading(lobby);
     if (lobby.phase === 'countdown' && t >= lobby.startAt) {
       lobby.phase = 'playing';
       lobby.updatedAt = t;
@@ -703,6 +725,12 @@ async function route(req, res, path) {
     case '/api/lobby/ready': {
       const lobby = roomFor(player);
       if (!lobby) return fail(res, 404, 'You are not in a lobby.');
+      // While the song loads, the same endpoint carries the "I am ready to play" report.
+      if (lobby.phase === 'loading' && body.loaded === true) {
+        lobby.loaded.add(player.id);
+        advanceLoading(lobby);
+        return send(res, 200, { ok: true, lobby: snapshot(lobby, player) });
+      }
       if (lobby.phase !== 'picking') return fail(res, 409, 'Cannot change ready state right now.');
       const isReadying = body.ready !== false;
       const myPicks = lobby.picks.get(player.id)?.size || 0;

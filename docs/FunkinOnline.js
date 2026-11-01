@@ -172829,7 +172829,7 @@ funkin_online_OnlineLobbyState.prototype = $extend(funkin_ui_MusicBeatState.prot
 		}
 		var tmp = Reflect.field(this.lobby,"phase");
 		var phase = Std.string(tmp != null ? tmp : "picking");
-		if((phase == "countdown" || phase == "playing") && !this.started) {
+		if((phase == "loading" || phase == "countdown" || phase == "playing") && !this.started) {
 			this.startMatch();
 		}
 		if(phase == "results" && this.started == false) {
@@ -172963,6 +172963,10 @@ funkin_online_OnlineLobbyState.prototype = $extend(funkin_ui_MusicBeatState.prot
 		case "countdown":
 			var ms = funkin_online_OnlineSession.numberField(this.lobby,"countdownMs");
 			this.phaseText.set_text("STARTING IN " + Std.string(Math.ceil(ms / 1000)) + "...");
+			this.phaseText.set_color(-7861);
+			break;
+		case "loading":
+			this.phaseText.set_text("Both ready — loading the song on both sides...");
 			this.phaseText.set_color(-7861);
 			break;
 		case "picking":
@@ -173330,9 +173334,11 @@ funkin_online_OnlineLobbyState.prototype = $extend(funkin_ui_MusicBeatState.prot
 		funkin_online_OnlineSession.inMatch = true;
 		funkin_online_OnlineSession.songId = songId;
 		funkin_online_OnlineSession.submitted = false;
+		funkin_online_OnlineSession.resetMatchGate();
+		funkin_online_OnlinePerf.apply();
 		funkin_online_OnlineSession.lastError = null;
 		var chart = funkin_online_OnlineSongs.resolveChart(songId,funkin_online_OnlineSession.difficulty(),funkin_online_OnlineSession.variation());
-		haxe_Log.trace("[online] starting " + songId + " (" + chart.difficulty + "/" + chart.variation + ") as " + funkin_online_OnlineSession.role(),{ fileName : "source/funkin/online/OnlineLobbyState.hx", lineNumber : 679, className : "funkin.online.OnlineLobbyState", methodName : "startMatch"});
+		haxe_Log.trace("[online] starting " + songId + " (" + chart.difficulty + "/" + chart.variation + ") as " + funkin_online_OnlineSession.role(),{ fileName : "source/funkin/online/OnlineLobbyState.hx", lineNumber : 686, className : "funkin.online.OnlineLobbyState", methodName : "startMatch"});
 		flixel_addons_transition_FlxTransitionableState.skipNextTransIn = true;
 		flixel_addons_transition_FlxTransitionableState.skipNextTransOut = true;
 		funkin_ui_transition_LoadingState.loadPlayState({ targetSong : target, targetDifficulty : chart.difficulty, targetVariation : chart.variation, practiceMode : false, minimalMode : false, botPlayMode : false},true);
@@ -173933,6 +173939,74 @@ funkin_online_OnlineMenuState.prototype = $extend(funkin_ui_MusicBeatState.proto
 	}
 	,__class__: funkin_online_OnlineMenuState
 });
+var funkin_online_OnlinePerf = function() { };
+$hxClasses["funkin.online.OnlinePerf"] = funkin_online_OnlinePerf;
+funkin_online_OnlinePerf.__name__ = "funkin.online.OnlinePerf";
+funkin_online_OnlinePerf.apply = function() {
+	var weakReason = funkin_online_OnlinePerf.detect();
+	if(weakReason.length == 0) {
+		if(!funkin_online_OnlinePerf.applied) {
+			haxe_Log.trace("[perf] quality: normal",{ fileName : "source/funkin/online/OnlinePerf.hx", lineNumber : 41, className : "funkin.online.OnlinePerf", methodName : "apply"});
+		}
+		funkin_online_OnlinePerf.applied = true;
+		return;
+	}
+	funkin_online_OnlinePerf.lowQuality = true;
+	funkin_online_OnlinePerf.reason = weakReason;
+	if(funkin_online_OnlinePerf.applied) {
+		return;
+	}
+	funkin_online_OnlinePerf.applied = true;
+	haxe_Log.trace("[perf] low quality mode: " + weakReason,{ fileName : "source/funkin/online/OnlinePerf.hx", lineNumber : 52, className : "funkin.online.OnlinePerf", methodName : "apply"});
+	try {
+		flixel_FlxG.set_updateFramerate(30);
+		flixel_FlxG.set_drawFramerate(30);
+	} catch( _g ) {
+		haxe_NativeStackTrace.lastError = _g;
+	}
+	try {
+		funkin_Preferences.set_zoomCamera(false);
+	} catch( _g ) {
+		haxe_NativeStackTrace.lastError = _g;
+	}
+	try {
+		flixel_FlxG.camera.set_antialiasing(false);
+	} catch( _g ) {
+		haxe_NativeStackTrace.lastError = _g;
+	}
+};
+funkin_online_OnlinePerf.detect = function() {
+	try {
+		var nav = $global.navigator;
+		var threads = 0;
+		if(nav.hardwareConcurrency != null) {
+			threads = nav.hardwareConcurrency | 0;
+		}
+		var memory = 0;
+		if(nav.deviceMemory != null) {
+			memory = parseFloat(Std.string(nav.deviceMemory));
+		}
+		var width = window.innerWidth;
+		var height = window.innerHeight;
+		var ratio = window.devicePixelRatio == null ? 1.0 : window.devicePixelRatio;
+		funkin_online_OnlinePerf.pixels = width * height * ratio * ratio | 0;
+		if(threads > 0 && threads <= 4) {
+			return threads + " CPU threads";
+		}
+		if(memory > 0 && memory <= 4) {
+			return memory + " GB RAM";
+		}
+		if(funkin_online_OnlinePerf.pixels > 2600000) {
+			return "large viewport (" + funkin_online_OnlinePerf.pixels + " px)";
+		}
+	} catch( _g ) {
+		haxe_NativeStackTrace.lastError = _g;
+	}
+	return "";
+};
+funkin_online_OnlinePerf.effectsOn = function() {
+	return !funkin_online_OnlinePerf.lowQuality;
+};
 var funkin_online_OnlineResultsState = function() {
 	this.gone = false;
 	this.busy = false;
@@ -174187,6 +174261,8 @@ funkin_online_OnlineSession.clearLobby = function() {
 	funkin_online_OnlineSession.lobby = null;
 	funkin_online_OnlineSession.inMatch = false;
 	funkin_online_OnlineSession.songId = null;
+	funkin_online_OnlineSession.loadedReported = false;
+	funkin_online_OnlineSession.gateStartedAt = 0;
 	funkin_online_OnlineSession.submitted = false;
 	funkin_online_OnlineSession.opponentLive = null;
 	funkin_online_OnlineSession.pendingHits = [];
@@ -174214,6 +174290,37 @@ funkin_online_OnlineSession.playsOpponentLane = function() {
 	} else {
 		return false;
 	}
+};
+funkin_online_OnlineSession.resetMatchGate = function() {
+	funkin_online_OnlineSession.loadedReported = false;
+	funkin_online_OnlineSession.gateStartedAt = 0;
+};
+funkin_online_OnlineSession.reportLoaded = function() {
+	if(!funkin_online_OnlineSession.inMatch || funkin_online_OnlineSession.loadedReported) {
+		return;
+	}
+	funkin_online_OnlineSession.loadedReported = true;
+	funkin_online_OnlineClient.call("/api/lobby/ready",{ loaded : true},function(res) {
+		var next = Reflect.field(res,"lobby");
+		if(next != null) {
+			funkin_online_OnlineSession.lobby = next;
+		}
+	},function(_) {
+	});
+};
+funkin_online_OnlineSession.startGateOpen = function() {
+	if(!funkin_online_OnlineSession.inMatch || funkin_online_OnlineSession.lobby == null) {
+		return true;
+	}
+	if(funkin_online_OnlineSession.gateStartedAt == 0) {
+		funkin_online_OnlineSession.gateStartedAt = HxOverrides.now() / 1000;
+	}
+	var tmp = Reflect.field(funkin_online_OnlineSession.lobby,"phase");
+	var phase = Std.string(tmp != null ? tmp : "");
+	if(phase == "countdown" || phase == "playing" || phase == "results") {
+		return true;
+	}
+	return HxOverrides.now() / 1000 - funkin_online_OnlineSession.gateStartedAt > 45;
 };
 funkin_online_OnlineSession.role = function() {
 	var me = funkin_online_OnlineSession.you();
@@ -174420,7 +174527,7 @@ funkin_online_OnlineSession.finishMatch = function(score,tallies,failed) {
 		funkin_online_OnlineClient.call("/api/lobby/result",stats,function(_) {
 		},function(error) {
 			funkin_online_OnlineSession.lastError = error;
-			haxe_Log.trace("[online] result upload failed: " + error,{ fileName : "source/funkin/online/OnlineSession.hx", lineNumber : 254, className : "funkin.online.OnlineSession", methodName : "finishMatch"});
+			haxe_Log.trace("[online] result upload failed: " + error,{ fileName : "source/funkin/online/OnlineSession.hx", lineNumber : 302, className : "funkin.online.OnlineSession", methodName : "finishMatch"});
 		});
 	}
 	if(flixel_FlxG.game._state != null) {
@@ -175660,6 +175767,7 @@ var funkin_play_PlayState = function(params) {
 	this.mirrorSongData = false;
 	this.isSongEnd = false;
 	this.debugUnbindCameraZoom = false;
+	this.onlineStartPending = false;
 	this.initialized = false;
 	this.soundsPausedBySubState = new haxe_ds_List();
 	this.cameraTweensPausedBySubState = new haxe_ds_List();
@@ -175713,7 +175821,7 @@ var funkin_play_PlayState = function(params) {
 	if(tmp != null) {
 		params1 = tmp;
 	} else {
-		haxe_Log.trace("WARNING: PlayState constructor called with no parameters. Reusing previous parameters.",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 751, className : "funkin.play.PlayState", methodName : "new"});
+		haxe_Log.trace("WARNING: PlayState constructor called with no parameters. Reusing previous parameters.",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 753, className : "funkin.play.PlayState", methodName : "new"});
 		var tmp = funkin_play_PlayState.lastParams;
 		if(tmp != null) {
 			params1 = tmp;
@@ -175860,6 +175968,7 @@ funkin_play_PlayState.prototype = $extend(funkin_ui_MusicBeatSubState.prototype,
 	,subtitles: null
 	,iconP1: null
 	,iconP2: null
+	,onlineStartPending: null
 	,playerStrumline: null
 	,opponentStrumline: null
 	,camHUD: null
@@ -175915,7 +176024,7 @@ funkin_play_PlayState.prototype = $extend(funkin_ui_MusicBeatSubState.prototype,
 	,skipEndingTransition: null
 	,create: function() {
 		if(funkin_play_PlayState.instance != null) {
-			haxe_Log.trace("WARNING: PlayState instance already exists. This should not happen.",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 835, className : "funkin.play.PlayState", methodName : "create"});
+			haxe_Log.trace("WARNING: PlayState instance already exists. This should not happen.",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 837, className : "funkin.play.PlayState", methodName : "create"});
 		}
 		funkin_play_PlayState.instance = this;
 		if(!this.get_isChartingMode()) {
@@ -175941,8 +176050,8 @@ funkin_play_PlayState.prototype = $extend(funkin_ui_MusicBeatSubState.prototype,
 		}
 		funkin_Conductor.get_instance().mapTimeChanges(this.get_currentChart().timeChanges);
 		var pre = funkin_Conductor.get_instance().get_beatLengthMs() * -5 + this.startTimestamp;
-		haxe_Log.trace("Attempting to start at " + pre,{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 880, className : "funkin.play.PlayState", methodName : "create"});
-		haxe_Log.trace("startTimestamp " + this.startTimestamp,{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 881, className : "funkin.play.PlayState", methodName : "create"});
+		haxe_Log.trace("Attempting to start at " + pre,{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 882, className : "funkin.play.PlayState", methodName : "create"});
+		haxe_Log.trace("startTimestamp " + this.startTimestamp,{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 883, className : "funkin.play.PlayState", methodName : "create"});
 		funkin_Conductor.get_instance().update(pre);
 		this.initCameras();
 		this.initHealthBar();
@@ -175954,6 +176063,7 @@ funkin_play_PlayState.prototype = $extend(funkin_ui_MusicBeatSubState.prototype,
 		}
 		this.initStrumlines();
 		this.initPopups();
+		funkin_online_OnlinePerf.apply();
 		this.generateSong();
 		this.resetCamera();
 		this.initPreciseInputs();
@@ -176078,7 +176188,7 @@ funkin_play_PlayState.prototype = $extend(funkin_ui_MusicBeatSubState.prototype,
 				var tmp = this.vocals;
 				var tmp1 = tmp != null ? tmp.members : null;
 				if((tmp1 != null ? tmp1.length : null) == 0) {
-					haxe_Log.trace("WARNING: No vocals found for this song.",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 1081, className : "funkin.play.PlayState", methodName : "update"});
+					haxe_Log.trace("WARNING: No vocals found for this song.",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 1086, className : "funkin.play.PlayState", methodName : "update"});
 				}
 			}
 			if(flixel_FlxG.sound.music != null) {
@@ -176133,7 +176243,7 @@ funkin_play_PlayState.prototype = $extend(funkin_ui_MusicBeatSubState.prototype,
 			if(this.isInCountdown) {
 				funkin_Conductor.get_instance().update(funkin_Conductor.get_instance().songPosition + elapsed * 1000,false);
 				if(funkin_Conductor.get_instance().songPosition >= this.startTimestamp + funkin_Conductor.get_instance().get_combinedOffset()) {
-					haxe_Log.trace("started song at " + funkin_Conductor.get_instance().songPosition,{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 1150, className : "funkin.play.PlayState", methodName : "update"});
+					haxe_Log.trace("started song at " + funkin_Conductor.get_instance().songPosition,{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 1155, className : "funkin.play.PlayState", methodName : "update"});
 					this.startSong();
 				}
 			}
@@ -176151,7 +176261,7 @@ funkin_play_PlayState.prototype = $extend(funkin_ui_MusicBeatSubState.prototype,
 					var a = funkin_Conductor.get_instance().songPosition;
 					tmp.update(a + easeRatio * (flixel_FlxG.sound.music._time + funkin_Conductor.get_instance().get_combinedOffset() - a),false);
 				} else {
-					haxe_Log.trace(funkin_util_AnsiUtil.apply(funkin_util_AnsiUtil.apply(" WARNING ","\x1B[43m"),"\x1B[1m") + " Normal Conductor Update!! are you lagging?",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 1185, className : "funkin.play.PlayState", methodName : "update"});
+					haxe_Log.trace(funkin_util_AnsiUtil.apply(funkin_util_AnsiUtil.apply(" WARNING ","\x1B[43m"),"\x1B[1m") + " Normal Conductor Update!! are you lagging?",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 1190, className : "funkin.play.PlayState", methodName : "update"});
 					funkin_Conductor.get_instance().update();
 				}
 			}
@@ -176190,7 +176300,7 @@ funkin_play_PlayState.prototype = $extend(funkin_ui_MusicBeatSubState.prototype,
 		if(!this.isInCutscene && !this.disableKeys) {
 			if(funkin_PlayerSettings.player1.controls._reset.checkPressed()) {
 				this.health = funkin_util_Constants.HEALTH_MIN;
-				haxe_Log.trace("RESET = True",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 1244, className : "funkin.play.PlayState", methodName : "update"});
+				haxe_Log.trace("RESET = True",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 1249, className : "funkin.play.PlayState", methodName : "update"});
 			}
 			if(this.health <= funkin_util_Constants.HEALTH_MIN && !this.isPracticeMode && !this.isPlayerDying) {
 				var tmp = this.vocals;
@@ -176395,7 +176505,7 @@ funkin_play_PlayState.prototype = $extend(funkin_ui_MusicBeatSubState.prototype,
 		if(this.songEvents.length > 0) {
 			var songEventsToActivate = funkin_data_event_SongEventRegistry.queryEvents(this.songEvents,funkin_Conductor.get_instance().songPosition);
 			if(songEventsToActivate.length > 0) {
-				haxe_Log.trace("Found " + songEventsToActivate.length + " event(s) to activate.",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 1489, className : "funkin.play.PlayState", methodName : "processSongEvents"});
+				haxe_Log.trace("Found " + songEventsToActivate.length + " event(s) to activate.",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 1494, className : "funkin.play.PlayState", methodName : "processSongEvents"});
 				var _g = 0;
 				while(_g < songEventsToActivate.length) {
 					var event = songEventsToActivate[_g];
@@ -176694,13 +176804,13 @@ funkin_play_PlayState.prototype = $extend(funkin_ui_MusicBeatSubState.prototype,
 				}
 			}
 			if(!this.startingSong && (Math.abs(flixel_FlxG.sound.music._time - correctSync) > funkin_play_PlayState.RESYNC_THRESHOLD || Math.abs(playerVoicesError) > funkin_play_PlayState.RESYNC_THRESHOLD || Math.abs(opponentVoicesError) > funkin_play_PlayState.RESYNC_THRESHOLD)) {
-				haxe_Log.trace("VOCALS NEED RESYNC",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 1919, className : "funkin.play.PlayState", methodName : "beatHit"});
+				haxe_Log.trace("VOCALS NEED RESYNC",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 1924, className : "funkin.play.PlayState", methodName : "beatHit"});
 				if(this.vocals != null) {
-					haxe_Log.trace(playerVoicesError,{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 1922, className : "funkin.play.PlayState", methodName : "beatHit"});
-					haxe_Log.trace(opponentVoicesError,{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 1923, className : "funkin.play.PlayState", methodName : "beatHit"});
+					haxe_Log.trace(playerVoicesError,{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 1927, className : "funkin.play.PlayState", methodName : "beatHit"});
+					haxe_Log.trace(opponentVoicesError,{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 1928, className : "funkin.play.PlayState", methodName : "beatHit"});
 				}
-				haxe_Log.trace(flixel_FlxG.sound.music._time,{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 1925, className : "funkin.play.PlayState", methodName : "beatHit"});
-				haxe_Log.trace(correctSync,{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 1926, className : "funkin.play.PlayState", methodName : "beatHit"});
+				haxe_Log.trace(flixel_FlxG.sound.music._time,{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 1930, className : "funkin.play.PlayState", methodName : "beatHit"});
+				haxe_Log.trace(correctSync,{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 1931, className : "funkin.play.PlayState", methodName : "beatHit"});
 				this.resyncVocals();
 			}
 		}
@@ -176880,13 +176990,13 @@ funkin_play_PlayState.prototype = $extend(funkin_ui_MusicBeatSubState.prototype,
 		var tmp = this.get_currentChart();
 		var currentCharacterData = tmp != null ? tmp.characters : null;
 		if(currentCharacterData == null) {
-			haxe_Log.trace("Cannot retrieve character data",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 2129, className : "funkin.play.PlayState", methodName : "initCharacters"});
+			haxe_Log.trace("Cannot retrieve character data",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 2134, className : "funkin.play.PlayState", methodName : "initCharacters"});
 			return;
 		}
 		var girlfriend = funkin_data_character_CharacterDataParser.fetchCharacter(currentCharacterData.girlfriend);
 		if(girlfriend == null) {
 			if(currentCharacterData.girlfriend != "") {
-				haxe_Log.trace("WARNING: Could not load girlfriend character with ID " + currentCharacterData.girlfriend + ", skipping...",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 2145, className : "funkin.play.PlayState", methodName : "initCharacters"});
+				haxe_Log.trace("WARNING: Could not load girlfriend character with ID " + currentCharacterData.girlfriend + ", skipping...",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 2150, className : "funkin.play.PlayState", methodName : "initCharacters"});
 			}
 		}
 		var dad = funkin_data_character_CharacterDataParser.fetchCharacter(currentCharacterData.opponent);
@@ -176972,7 +177082,7 @@ funkin_play_PlayState.prototype = $extend(funkin_ui_MusicBeatSubState.prototype,
 			return "??? [???]";
 		}
 		if(this.get_currentChart() == null) {
-			haxe_Log.trace("WARNING: Difficulty data for RPC is null.",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 2466, className : "funkin.play.PlayState", methodName : "buildDiscordRPCState"});
+			haxe_Log.trace("WARNING: Difficulty data for RPC is null.",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 2471, className : "funkin.play.PlayState", methodName : "buildDiscordRPCState"});
 		}
 		var tmp = funkin_play_PlayState.instance;
 		var tmp1 = tmp != null ? tmp.currentDifficulty : null;
@@ -177001,7 +177111,7 @@ funkin_play_PlayState.prototype = $extend(funkin_ui_MusicBeatSubState.prototype,
 			var tmp = this.vocals;
 			var tmp1 = tmp != null ? tmp.members : null;
 			if((tmp1 != null ? tmp1.length : null) == 0) {
-				haxe_Log.trace("WARNING: No vocals found for this song.",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 2499, className : "funkin.play.PlayState", methodName : "generateSong"});
+				haxe_Log.trace("WARNING: No vocals found for this song.",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 2504, className : "funkin.play.PlayState", methodName : "generateSong"});
 			}
 		}
 		this.regenNoteData(this.startTimestamp);
@@ -177014,7 +177124,7 @@ funkin_play_PlayState.prototype = $extend(funkin_ui_MusicBeatSubState.prototype,
 			startTime = 0;
 		}
 		if(this.get_currentChart() == null) {
-			haxe_Log.trace("Cannot regenerate note data for null chart",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 2518, className : "funkin.play.PlayState", methodName : "regenNoteData"});
+			haxe_Log.trace("Cannot regenerate note data for null chart",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 2523, className : "funkin.play.PlayState", methodName : "regenNoteData"});
 			return;
 		}
 		funkin_Highscore.tallies.combo = 0;
@@ -177062,6 +177172,29 @@ funkin_play_PlayState.prototype = $extend(funkin_ui_MusicBeatSubState.prototype,
 				break;
 			}
 		}
+		if(funkin_online_OnlineSession.playsOpponentLane()) {
+			var swap = playerNoteData;
+			playerNoteData = opponentNoteData;
+			opponentNoteData = swap;
+			var total = 0;
+			var _g = 0;
+			while(_g < playerNoteData.length) {
+				var songNote = playerNoteData[_g];
+				++_g;
+				var scoreable = true;
+				if(songNote.get_kind() != null) {
+					var tmp = songNote.get_kind();
+					var kind = funkin_play_notes_notekind_NoteKindManager.getNoteKind(tmp != null ? tmp : "");
+					if(kind != null) {
+						scoreable = kind.scoreable;
+					}
+				}
+				if(scoreable) {
+					++total;
+				}
+			}
+			funkin_Highscore.tallies.totalNotes = total;
+		}
 		this.playerStrumline.applyNoteData(playerNoteData);
 		this.opponentStrumline.applyNoteData(opponentNoteData);
 	}
@@ -177070,6 +177203,23 @@ funkin_play_PlayState.prototype = $extend(funkin_ui_MusicBeatSubState.prototype,
 		this.dispatchEvent(event);
 	}
 	,startCountdown: function() {
+		var _gthis = this;
+		if(funkin_online_OnlineSession.inMatch && !funkin_online_OnlineSession.startGateOpen()) {
+			funkin_online_OnlineSession.reportLoaded();
+			if(!this.onlineStartPending) {
+				this.onlineStartPending = true;
+				haxe_Timer.delay(function() {
+					_gthis.onlineStartPending = false;
+					if(_gthis.startingSong && !_gthis.isInCountdown) {
+						_gthis.startCountdown();
+					}
+				},250);
+			}
+			return;
+		}
+		if(funkin_online_OnlineSession.inMatch) {
+			funkin_online_OnlineSession.reportLoaded();
+		}
 		var result = funkin_play_Countdown.performCountdown();
 		if(!result) {
 			return;
@@ -177115,7 +177265,7 @@ funkin_play_PlayState.prototype = $extend(funkin_ui_MusicBeatSubState.prototype,
 			}
 		}
 		if(flixel_FlxG.sound.music == null) {
-			flixel_FlxG.log.advanced("PlayState failed to initialize instrumental!",flixel_system_debug_log_LogStyle.ERROR,true,{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 2656, className : "funkin.play.PlayState", methodName : "startSong"});
+			flixel_FlxG.log.advanced("PlayState failed to initialize instrumental!",flixel_system_debug_log_LogStyle.ERROR,true,{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 2702, className : "funkin.play.PlayState", methodName : "startSong"});
 			return;
 		}
 		flixel_FlxG.sound.music.onComplete = function() {
@@ -177165,7 +177315,7 @@ funkin_play_PlayState.prototype = $extend(funkin_ui_MusicBeatSubState.prototype,
 			return;
 		}
 		var timeToPlayAt = Math.min(flixel_FlxG.sound.music._length - 1,Math.max(Math.min(funkin_Conductor.get_instance().get_combinedOffset(),0),funkin_Conductor.get_instance().songPosition) - funkin_Conductor.get_instance().get_combinedOffset());
-		haxe_Log.trace("Resyncing vocals to " + timeToPlayAt,{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 2740, className : "funkin.play.PlayState", methodName : "resyncVocals"});
+		haxe_Log.trace("Resyncing vocals to " + timeToPlayAt,{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 2786, className : "funkin.play.PlayState", methodName : "resyncVocals"});
 		flixel_FlxG.sound.music.pause();
 		this.vocals.pause();
 		flixel_FlxG.sound.music.set_time(timeToPlayAt);
@@ -177328,7 +177478,7 @@ funkin_play_PlayState.prototype = $extend(funkin_ui_MusicBeatSubState.prototype,
 				holdNote.handledMiss = true;
 				if(!this.isBotPlayMode && holdNote.scoreable) {
 					if(holdNote.sustainLength > funkin_util_Constants.HOLD_DROP_PENALTY_THRESHOLD_MS) {
-						haxe_Log.trace("Player dropped a hold note, penalizing... (has hit: " + (holdNote.hitNote == null ? "null" : "" + holdNote.hitNote) + ")",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 2978, className : "funkin.play.PlayState", methodName : "processNotes"});
+						haxe_Log.trace("Player dropped a hold note, penalizing... (has hit: " + (holdNote.hitNote == null ? "null" : "" + holdNote.hitNote) + ")",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 3024, className : "funkin.play.PlayState", methodName : "processNotes"});
 						var remainingLengthSec = holdNote.sustainLength / funkin_util_Constants.MS_PER_SEC;
 						var healthChangeUncapped = remainingLengthSec * funkin_util_Constants.HEALTH_HOLD_DROP_PENALTY_PER_SECOND;
 						var healthChangeMax = funkin_util_Constants.HEALTH_HOLD_DROP_PENALTY_MAX - (holdNote.hitNote ? -funkin_util_Constants.HEALTH_MISS_PENALTY : 0);
@@ -177339,7 +177489,7 @@ funkin_play_PlayState.prototype = $extend(funkin_ui_MusicBeatSubState.prototype,
 						if(event.eventCanceled) {
 							continue;
 						}
-						haxe_Log.trace("Penalizing score by " + event.score + " and health by " + event.healthChange + " for dropping hold note (is combo break: " + (event.isComboBreak == null ? "null" : "" + event.isComboBreak) + ")!",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 2995, className : "funkin.play.PlayState", methodName : "processNotes"});
+						haxe_Log.trace("Penalizing score by " + event.score + " and health by " + event.healthChange + " for dropping hold note (is combo break: " + (event.isComboBreak == null ? "null" : "" + event.isComboBreak) + ")!",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 3041, className : "funkin.play.PlayState", methodName : "processNotes"});
 						this.applyScore(event.score,"",event.healthChange,event.isComboBreak);
 						if(event.playSound) {
 							if(this.vocals != null) {
@@ -177351,7 +177501,7 @@ funkin_play_PlayState.prototype = $extend(funkin_ui_MusicBeatSubState.prototype,
 							funkin_audio_FunkinSound.playOnce(funkin_Paths.soundRandom("missnote",1,3),flixel_FlxG.random.float(0.5,0.6));
 						}
 					} else {
-						haxe_Log.trace("Hold note too short, not penalizing...",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 3011, className : "funkin.play.PlayState", methodName : "processNotes"});
+						haxe_Log.trace("Hold note too short, not penalizing...",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 3057, className : "funkin.play.PlayState", methodName : "processNotes"});
 					}
 				}
 			}
@@ -177404,10 +177554,10 @@ funkin_play_PlayState.prototype = $extend(funkin_ui_MusicBeatSubState.prototype,
 			if(notesInDirection.length == 0) {
 				this.ghostNoteMiss(input.noteDirection,notesInRange.length > 0);
 				this.playerStrumline.playPress(input.noteDirection);
-				haxe_Log.trace("PENALTY Score: " + this.songScore,{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 3086, className : "funkin.play.PlayState", methodName : "processInputQueue"});
+				haxe_Log.trace("PENALTY Score: " + this.songScore,{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 3132, className : "funkin.play.PlayState", methodName : "processInputQueue"});
 			} else if(notesInDirection.length == 0) {
 				this.playerStrumline.playPress(input.noteDirection);
-				haxe_Log.trace("NO PENALTY Score: " + this.songScore,{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 3094, className : "funkin.play.PlayState", methodName : "processInputQueue"});
+				haxe_Log.trace("NO PENALTY Score: " + this.songScore,{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 3140, className : "funkin.play.PlayState", methodName : "processInputQueue"});
 			} else {
 				var targetNote = thx_Arrays.find(notesInDirection,function(note) {
 					return !note.lowPriority;
@@ -177629,7 +177779,7 @@ funkin_play_PlayState.prototype = $extend(funkin_ui_MusicBeatSubState.prototype,
 	}
 	,popUpScore: function(daRating,combo) {
 		if(daRating == "miss") {
-			flixel_FlxG.log.advanced("popUpScore judged a note as a miss!",flixel_system_debug_log_LogStyle.WARNING,true,{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 3389, className : "funkin.play.PlayState", methodName : "popUpScore"});
+			flixel_FlxG.log.advanced("popUpScore judged a note as a miss!",flixel_system_debug_log_LogStyle.WARNING,true,{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 3435, className : "funkin.play.PlayState", methodName : "popUpScore"});
 			return;
 		}
 		if(combo == null) {
@@ -177758,7 +177908,7 @@ funkin_play_PlayState.prototype = $extend(funkin_ui_MusicBeatSubState.prototype,
 				}
 			} else {
 				var difficulty = "";
-				haxe_Log.trace("Loading next song (" + targetSongId + " : " + difficulty + ")",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 3653, className : "funkin.play.PlayState", methodName : "endSong"});
+				haxe_Log.trace("Loading next song (" + targetSongId + " : " + difficulty + ")",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 3699, className : "funkin.play.PlayState", methodName : "endSong"});
 				flixel_addons_transition_FlxTransitionableState.skipNextTransIn = true;
 				flixel_addons_transition_FlxTransitionableState.skipNextTransOut = true;
 				var tmp = flixel_FlxG.sound.music;
@@ -177876,7 +178026,7 @@ funkin_play_PlayState.prototype = $extend(funkin_ui_MusicBeatSubState.prototype,
 	}
 	,zoomIntoResultsScreen: function(isNewHighscore,prevScoreData) {
 		var _gthis = this;
-		haxe_Log.trace("WENT TO RESULTS SCREEN!",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 3816, className : "funkin.play.PlayState", methodName : "zoomIntoResultsScreen"});
+		haxe_Log.trace("WENT TO RESULTS SCREEN!",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 3862, className : "funkin.play.PlayState", methodName : "zoomIntoResultsScreen"});
 		this.cameraZoomRate = 0;
 		this.cancelAllCameraTweens();
 		this.cancelScrollSpeedTweens();
@@ -177923,7 +178073,7 @@ funkin_play_PlayState.prototype = $extend(funkin_ui_MusicBeatSubState.prototype,
 		if(tmp != null) {
 			currentChart = tmp;
 		} else {
-			haxe_Log.trace("ERROR: Cannot move to results screen with a null chart.",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 3894, className : "funkin.play.PlayState", methodName : "moveToResultsScreen"});
+			haxe_Log.trace("ERROR: Cannot move to results screen with a null chart.",{ fileName : "source/funkin/play/PlayState.hx", lineNumber : 3940, className : "funkin.play.PlayState", methodName : "moveToResultsScreen"});
 			return;
 		}
 		this.persistentUpdate = false;
@@ -441828,6 +441978,10 @@ funkin_online_OnlineLobbyState.LETTER_KEYS = [65,66,67,68,69,70,71,72,73,74,75,7
 funkin_online_OnlineLobbyState.LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 funkin_online_OnlineMenuState.DIGIT_KEYS = [48,49,50,51,52,53,54,55,56,57];
 funkin_online_OnlineMenuState.OPTIONS = ["HOST GAME","JOIN WITH CODE","FIND MATCH","BACK"];
+funkin_online_OnlinePerf.lowQuality = false;
+funkin_online_OnlinePerf.reason = "";
+funkin_online_OnlinePerf.pixels = 0;
+funkin_online_OnlinePerf.applied = false;
 funkin_online_OnlineSession.lobby = null;
 funkin_online_OnlineSession.inMatch = false;
 funkin_online_OnlineSession.songId = null;
@@ -441836,6 +441990,8 @@ funkin_online_OnlineSession.lastError = null;
 funkin_online_OnlineSession.opponentLive = null;
 funkin_online_OnlineSession.lastLiveUpload = 0.0;
 funkin_online_OnlineSession.pendingHits = [];
+funkin_online_OnlineSession.loadedReported = false;
+funkin_online_OnlineSession.gateStartedAt = 0;
 funkin_online_OnlineSession.appliedRemoteHits = new haxe_ds_StringMap();
 funkin_online_OnlineSongs._cache = null;
 funkin_online_OnlineTheme.BG = -16055277;
