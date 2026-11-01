@@ -123,6 +123,41 @@ function tryServeFile(res, filePath) {
   }
 }
 
+// --------------------------------------------------------------------------
+// Same-origin adoption
+//
+// GitHub Pages serves these files statically, so the page keeps whatever server
+// URL tools/build-docs.js baked in. When THIS server serves them instead (Render,
+// LAN, localhost), the page should talk to the origin that served it -- that way
+// any Render hostname works without rebuilding or editing the game.
+// --------------------------------------------------------------------------
+
+const ORIGIN_MARKER = 'FNF_ONLINE_SERVER=window.FNF_ONLINE_SERVER||window.location.origin';
+const ORIGIN_SCRIPT = '<script type="text/javascript">window.' + ORIGIN_MARKER + ';</script>';
+
+function tryServeGameFile(res, filePath) {
+  if (path.extname(filePath).toLowerCase() !== '.html') return tryServeFile(res, filePath);
+  try {
+    if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) return false;
+    let html = fs.readFileSync(filePath, 'utf8');
+    if (html.indexOf(ORIGIN_MARKER) === -1) {
+      const head = /<head[^>]*>/i.exec(html);
+      const at = head ? head.index + head[0].length : 0;
+      html = html.slice(0, at) + '\n\t' + ORIGIN_SCRIPT + html.slice(at);
+    }
+    res.writeHead(200, {
+      'content-type': 'text/html; charset=utf-8',
+      'content-length': Buffer.byteLength(html),
+      'access-control-allow-origin': '*',
+      'cache-control': 'no-cache',
+    });
+    res.end(html);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function randomToken() {
   return crypto.randomBytes(24).toString('hex');
 }
@@ -810,7 +845,7 @@ function createServer() {
       // Check HTML5 game builds first
       for (const dir of html5Dirs) {
         const target = path.join(dir, safePath);
-        if (target.startsWith(dir) && tryServeFile(res, target)) {
+        if (target.startsWith(dir) && tryServeGameFile(res, target)) {
           return;
         }
       }
