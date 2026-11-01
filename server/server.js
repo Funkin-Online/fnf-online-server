@@ -103,7 +103,7 @@ const MIME_TYPES = {
   '.txt': 'text/plain; charset=utf-8',
 };
 
-function tryServeFile(res, filePath) {
+function tryServeFile(res, filePath, headOnly = false) {
   try {
     if (!fs.existsSync(filePath)) return false;
     const stat = fs.statSync(filePath);
@@ -116,7 +116,8 @@ function tryServeFile(res, filePath) {
       'access-control-allow-origin': '*',
       'cache-control': ext === '.html' ? 'no-cache' : 'public, max-age=3600',
     });
-    fs.createReadStream(filePath).pipe(res);
+    if (headOnly) res.end();
+    else fs.createReadStream(filePath).pipe(res);
     return true;
   } catch {
     return false;
@@ -145,8 +146,8 @@ function decodePath(rawPath) {
   return decoded.replace(/\0/g, '');
 }
 
-function tryServeGameFile(res, filePath) {
-  if (path.extname(filePath).toLowerCase() !== '.html') return tryServeFile(res, filePath);
+function tryServeGameFile(res, filePath, headOnly = false) {
+  if (path.extname(filePath).toLowerCase() !== '.html') return tryServeFile(res, filePath, headOnly);
   try {
     if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) return false;
     let html = fs.readFileSync(filePath, 'utf8');
@@ -161,7 +162,8 @@ function tryServeGameFile(res, filePath) {
       'access-control-allow-origin': '*',
       'cache-control': 'no-cache',
     });
-    res.end(html);
+    if (headOnly) res.end();
+    else res.end(html);
     return true;
   } catch {
     return false;
@@ -878,7 +880,8 @@ function createServer() {
     }
 
     // Serve static files or game files on GET requests (non-API)
-    if (req.method === 'GET' && !reqPath.startsWith('/api/') && reqPath !== '/healthz') {
+    if ((req.method === 'GET' || req.method === 'HEAD') && !reqPath.startsWith('/api/') && reqPath !== '/healthz') {
+      const headOnly = req.method === 'HEAD';
       // docs/ is the web build that ships in the repo: GitHub Pages serves it
       // and this server serves it too, so one push hosts both.
       const html5Dirs = [
@@ -894,14 +897,14 @@ function createServer() {
       // Check HTML5 game builds first
       for (const dir of html5Dirs) {
         const target = path.join(dir, safePath);
-        if (target.startsWith(dir) && tryServeGameFile(res, target)) {
+        if (target.startsWith(dir) && tryServeGameFile(res, target, headOnly)) {
           return;
         }
       }
 
       // Check server public directory
       const publicTarget = path.join(__dirname, 'public', safePath);
-      if (publicTarget.startsWith(path.join(__dirname, 'public')) && tryServeFile(res, publicTarget)) {
+      if (publicTarget.startsWith(path.join(__dirname, 'public')) && tryServeFile(res, publicTarget, headOnly)) {
         return;
       }
 
