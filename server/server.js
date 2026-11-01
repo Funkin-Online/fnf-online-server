@@ -288,6 +288,7 @@ function createLobby(host, { matchmade = false } = {}) {
     difficulty: 'normal',
     variation: 'default',
     phase: 'picking', // picking | countdown | playing | results
+    matchSeq: 0, // bumped for every match, so clients can spot stale snapshots
     playerIds: [host.id],
     picks: new Map(), // playerId -> Set(songId)
     ready: new Map(), // playerId -> bool
@@ -368,6 +369,7 @@ function startSong(lobby, forced) {
   };
   // Do not start the clock yet: a client that is still preloading the chart
   // would join the song mid-way. Wait for every side to report loaded.
+  lobby.matchSeq = (lobby.matchSeq || 0) + 1;
   lobby.phase = 'loading';
   lobby.startAt = 0;
   lobby.loaded = new Set();
@@ -452,6 +454,7 @@ function snapshot(lobby, viewer) {
   return {
     code: lobby.code,
     phase: lobby.phase,
+    matchSeq: lobby.matchSeq || 0,
     mode: lobby.mode,
     hostId: lobby.hostId,
     you: {

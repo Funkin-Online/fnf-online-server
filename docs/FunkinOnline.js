@@ -174596,6 +174596,7 @@ funkin_online_OnlineSession.rename = function(newName,onDone) {
 funkin_online_OnlineSession.resetMatchGate = function() {
 	funkin_online_OnlineSession.loadedReported = false;
 	funkin_online_OnlineSession.gateStartedAt = 0;
+	funkin_online_OnlineSession.gateSeq = funkin_online_OnlineSession.lobby == null ? -1 : funkin_online_OnlineSession.numberField(funkin_online_OnlineSession.lobby,"matchSeq") | 0;
 };
 funkin_online_OnlineSession.reportLoaded = function() {
 	if(!funkin_online_OnlineSession.inMatch || funkin_online_OnlineSession.loadedReported) {
@@ -174605,7 +174606,8 @@ funkin_online_OnlineSession.reportLoaded = function() {
 	funkin_online_OnlineClient.call("/api/lobby/ready",{ loaded : true},function(res) {
 		var next = Reflect.field(res,"lobby");
 		if(next != null) {
-			funkin_online_OnlineSession.lobby = next;
+			funkin_online_OnlineSession.setLobby(next);
+			funkin_online_OnlineSession.gateSeq = funkin_online_OnlineSession.numberField(next,"matchSeq") | 0;
 		}
 	},function(_) {
 		funkin_online_OnlineSession.loadedReported = false;
@@ -174644,6 +174646,10 @@ funkin_online_OnlineSession.startGateOpen = function() {
 	}
 	if(funkin_online_OnlineSession.gateStartedAt == 0) {
 		funkin_online_OnlineSession.gateStartedAt = HxOverrides.now() / 1000;
+	}
+	var seq = funkin_online_OnlineSession.numberField(funkin_online_OnlineSession.lobby,"matchSeq") | 0;
+	if(funkin_online_OnlineSession.gateSeq >= 0 && seq < funkin_online_OnlineSession.gateSeq) {
+		return false;
 	}
 	var tmp = Reflect.field(funkin_online_OnlineSession.lobby,"phase");
 	var phase = Std.string(tmp != null ? tmp : "");
@@ -174860,7 +174866,7 @@ funkin_online_OnlineSession.finishMatch = function(score,tallies,failed) {
 		funkin_online_OnlineClient.call("/api/lobby/result",stats,function(_) {
 		},function(error) {
 			funkin_online_OnlineSession.lastError = error;
-			haxe_Log.trace("[online] result upload failed: " + error,{ fileName : "source/funkin/online/OnlineSession.hx", lineNumber : 391, className : "funkin.online.OnlineSession", methodName : "finishMatch"});
+			haxe_Log.trace("[online] result upload failed: " + error,{ fileName : "source/funkin/online/OnlineSession.hx", lineNumber : 404, className : "funkin.online.OnlineSession", methodName : "finishMatch"});
 		});
 	}
 	if(flixel_FlxG.game._state != null) {
@@ -442368,6 +442374,7 @@ funkin_online_OnlineSession.lastLiveUpload = 0.0;
 funkin_online_OnlineSession.pendingHits = [];
 funkin_online_OnlineSession.loadedReported = false;
 funkin_online_OnlineSession.gateStartedAt = 0;
+funkin_online_OnlineSession.gateSeq = -1;
 funkin_online_OnlineSession.lobbyReceivedAt = 0;
 funkin_online_OnlineSession.appliedRemoteHits = new haxe_ds_StringMap();
 funkin_online_OnlineSongs._cache = null;
