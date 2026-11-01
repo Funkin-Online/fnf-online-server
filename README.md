@@ -120,9 +120,8 @@ without rebuilding by opening the page with a query string:
 https://funkin-online.github.io/fnf-online-server/?server=https://my-service.onrender.com
 ```
 
-The choice is saved in `localStorage`; the in-game **SERVER IP** screen (press
-**S** on the ONLINE menu) also switches and saves it. Clearing the browser's
-site data goes back to the baked-in default.
+The choice is saved in `localStorage`. Clearing the browser's site data goes
+back to the baked-in default.
 
 ---
 

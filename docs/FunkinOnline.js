@@ -173429,15 +173429,13 @@ var funkin_online__$OnlineMenuState_OnlineMenuMode = $hxEnums["funkin.online._On
 	,Hub: {_hx_name:"Hub",_hx_index:0,__enum__:"funkin.online._OnlineMenuState.OnlineMenuMode",toString:$estr}
 	,Join: {_hx_name:"Join",_hx_index:1,__enum__:"funkin.online._OnlineMenuState.OnlineMenuMode",toString:$estr}
 	,Queue: {_hx_name:"Queue",_hx_index:2,__enum__:"funkin.online._OnlineMenuState.OnlineMenuMode",toString:$estr}
-	,Server: {_hx_name:"Server",_hx_index:3,__enum__:"funkin.online._OnlineMenuState.OnlineMenuMode",toString:$estr}
 };
-funkin_online__$OnlineMenuState_OnlineMenuMode.__constructs__ = [funkin_online__$OnlineMenuState_OnlineMenuMode.Hub,funkin_online__$OnlineMenuState_OnlineMenuMode.Join,funkin_online__$OnlineMenuState_OnlineMenuMode.Queue,funkin_online__$OnlineMenuState_OnlineMenuMode.Server];
-funkin_online__$OnlineMenuState_OnlineMenuMode.__empty_constructs__ = [funkin_online__$OnlineMenuState_OnlineMenuMode.Hub,funkin_online__$OnlineMenuState_OnlineMenuMode.Join,funkin_online__$OnlineMenuState_OnlineMenuMode.Queue,funkin_online__$OnlineMenuState_OnlineMenuMode.Server];
+funkin_online__$OnlineMenuState_OnlineMenuMode.__constructs__ = [funkin_online__$OnlineMenuState_OnlineMenuMode.Hub,funkin_online__$OnlineMenuState_OnlineMenuMode.Join,funkin_online__$OnlineMenuState_OnlineMenuMode.Queue];
+funkin_online__$OnlineMenuState_OnlineMenuMode.__empty_constructs__ = [funkin_online__$OnlineMenuState_OnlineMenuMode.Hub,funkin_online__$OnlineMenuState_OnlineMenuMode.Join,funkin_online__$OnlineMenuState_OnlineMenuMode.Queue];
 var funkin_online_OnlineMenuState = function() {
 	this.gone = false;
 	this.pollTimer = 0;
 	this.busy = false;
-	this.serverInput = "";
 	this.code = "";
 	this.codeDigits = [];
 	this.codeBoxes = [];
@@ -173456,10 +173454,6 @@ funkin_online_OnlineMenuState.prototype = $extend(funkin_ui_MusicBeatState.proto
 	,codeBoxes: null
 	,codeDigits: null
 	,code: null
-	,serverBox: null
-	,serverInputText: null
-	,serverHint: null
-	,serverInput: null
 	,title: null
 	,subtitle: null
 	,status: null
@@ -173513,21 +173507,6 @@ funkin_online_OnlineMenuState.prototype = $extend(funkin_ui_MusicBeatState.proto
 			this.add(digit);
 			this.codeDigits.push(digit);
 		}
-		this.serverBox = funkin_online_OnlineTheme.panel(flixel_FlxG.width / 2 - 270,280,540,72,-14282438);
-		this.serverBox.set_visible(false);
-		this.add(this.serverBox);
-		this.serverInputText = funkin_online_OnlineTheme.text(22,-7861,"center");
-		this.serverInputText.set_fieldWidth(520);
-		this.serverInputText.set_x(flixel_FlxG.width / 2 - 260);
-		this.serverInputText.set_y(302);
-		this.serverInputText.set_visible(false);
-		this.add(this.serverInputText);
-		this.serverHint = funkin_online_OnlineTheme.text(15,-6653256,"center");
-		this.serverHint.set_fieldWidth(600);
-		this.serverHint.set_text("Type server IP (e.g. 192.168.1.67:8080)   ENTER save   ESC cancel\nShortcuts: [1] Localhost:8080   [2] Render Cloud");
-		funkin_online_OnlineTheme.centered(this.serverHint,380);
-		this.serverHint.set_visible(false);
-		this.add(this.serverHint);
 		this.joinHint = funkin_online_OnlineTheme.text(18,-6653256);
 		this.joinHint.set_text("Type the 6 digit code your friend sent you. ENTER to join, ESC to go back.");
 		funkin_online_OnlineTheme.centered(this.joinHint,404);
@@ -173638,30 +173617,6 @@ funkin_online_OnlineMenuState.prototype = $extend(funkin_ui_MusicBeatState.proto
 			}
 			return;
 		}
-		if(this.mode == funkin_online__$OnlineMenuState_OnlineMenuMode.Server) {
-			if(funkin_PlayerSettings.player1.controls._back.checkJustPressed()) {
-				this.setMode(funkin_online__$OnlineMenuState_OnlineMenuMode.Hub);
-				return;
-			}
-			if(funkin_PlayerSettings.player1.controls._accept.checkJustPressed()) {
-				this.submitServer();
-				return;
-			}
-			if(flixel_FlxG.keys.checkKeyArrayState([49],2) && (this.serverInput.length == 0 || this.serverInput == funkin_online_OnlineConfig.serverUrl)) {
-				this.serverInput = funkin_online_OnlineConfig.LOCAL_SERVER;
-				this.playTick();
-				this.refreshServerInput();
-				return;
-			}
-			if(flixel_FlxG.keys.checkKeyArrayState([50],2) && (this.serverInput.length == 0 || this.serverInput == funkin_online_OnlineConfig.serverUrl)) {
-				this.serverInput = funkin_online_OnlineConfig.DEFAULT_SERVER;
-				this.playTick();
-				this.refreshServerInput();
-				return;
-			}
-			this.handleServerTextInput();
-			return;
-		}
 		if(this.busy) {
 			return;
 		}
@@ -173681,11 +173636,6 @@ funkin_online_OnlineMenuState.prototype = $extend(funkin_ui_MusicBeatState.proto
 		if(funkin_PlayerSettings.player1.controls._back.checkJustPressed()) {
 			this.backToMainMenu();
 		}
-		var _this = flixel_FlxG.keys.justPressed;
-		if(_this.keyManager.checkStatusUnsafe(83,_this.status)) {
-			this.serverInput = funkin_online_OnlineConfig.serverUrl;
-			this.setMode(funkin_online__$OnlineMenuState_OnlineMenuMode.Server);
-		}
 	}
 	,chooseOption: function() {
 		this.playConfirm();
@@ -173699,10 +173649,6 @@ funkin_online_OnlineMenuState.prototype = $extend(funkin_ui_MusicBeatState.proto
 			break;
 		case 2:
 			this.findMatch();
-			break;
-		case 3:
-			this.serverInput = funkin_online_OnlineConfig.serverUrl;
-			this.setMode(funkin_online__$OnlineMenuState_OnlineMenuMode.Server);
 			break;
 		default:
 			this.backToMainMenu();
@@ -173884,7 +173830,6 @@ funkin_online_OnlineMenuState.prototype = $extend(funkin_ui_MusicBeatState.proto
 	,refreshMenu: function() {
 		var isHub = this.mode == funkin_online__$OnlineMenuState_OnlineMenuMode.Hub;
 		var isJoin = this.mode == funkin_online__$OnlineMenuState_OnlineMenuMode.Join;
-		var isServer = this.mode == funkin_online__$OnlineMenuState_OnlineMenuMode.Server;
 		var _g = 0;
 		var _g1 = this.optionTexts.length;
 		while(_g < _g1) {
@@ -173911,161 +173856,16 @@ funkin_online_OnlineMenuState.prototype = $extend(funkin_ui_MusicBeatState.proto
 		}
 		this.joinHint.set_visible(isJoin);
 		this.queueStatus.set_visible(this.mode == funkin_online__$OnlineMenuState_OnlineMenuMode.Queue);
-		this.serverBox.set_visible(isServer);
-		this.serverInputText.set_visible(isServer);
-		this.serverHint.set_visible(isServer);
-		if(isServer) {
-			this.refreshServerInput();
-		}
 		if(isHub) {
-			this.hint.set_text("UP/DOWN select   ENTER confirm   ESC back   S: server IP");
+			this.hint.set_text("UP/DOWN select   ENTER confirm   ESC back");
 		} else if(isJoin) {
 			this.hint.set_text("DIGITS type   BACKSPACE erase   ENTER join   ESC back");
-		} else if(isServer) {
-			this.hint.set_text("TYPE IP   BACKSPACE erase   ENTER save & test   ESC cancel");
 		} else {
 			this.hint.set_text("ESC to cancel the search");
 		}
 		if(this.mode == funkin_online__$OnlineMenuState_OnlineMenuMode.Queue) {
 			this.status.set_text("Tip: open the game on another PC and pick FIND MATCH too.");
 		}
-	}
-	,handleServerTextInput: function() {
-		if(flixel_FlxG.keys.checkKeyArrayState([funkin_online_OnlineMenuState.DIGIT_KEYS[0],funkin_online_OnlineMenuState.NUMPAD_KEYS[0]],2)) {
-			this.serverInput += "0";
-			this.playTick();
-			this.refreshServerInput();
-			return;
-		}
-		if(flixel_FlxG.keys.checkKeyArrayState([funkin_online_OnlineMenuState.DIGIT_KEYS[1],funkin_online_OnlineMenuState.NUMPAD_KEYS[1]],2)) {
-			this.serverInput += "1";
-			this.playTick();
-			this.refreshServerInput();
-			return;
-		}
-		if(flixel_FlxG.keys.checkKeyArrayState([funkin_online_OnlineMenuState.DIGIT_KEYS[2],funkin_online_OnlineMenuState.NUMPAD_KEYS[2]],2)) {
-			this.serverInput += "2";
-			this.playTick();
-			this.refreshServerInput();
-			return;
-		}
-		if(flixel_FlxG.keys.checkKeyArrayState([funkin_online_OnlineMenuState.DIGIT_KEYS[3],funkin_online_OnlineMenuState.NUMPAD_KEYS[3]],2)) {
-			this.serverInput += "3";
-			this.playTick();
-			this.refreshServerInput();
-			return;
-		}
-		if(flixel_FlxG.keys.checkKeyArrayState([funkin_online_OnlineMenuState.DIGIT_KEYS[4],funkin_online_OnlineMenuState.NUMPAD_KEYS[4]],2)) {
-			this.serverInput += "4";
-			this.playTick();
-			this.refreshServerInput();
-			return;
-		}
-		if(flixel_FlxG.keys.checkKeyArrayState([funkin_online_OnlineMenuState.DIGIT_KEYS[5],funkin_online_OnlineMenuState.NUMPAD_KEYS[5]],2)) {
-			this.serverInput += "5";
-			this.playTick();
-			this.refreshServerInput();
-			return;
-		}
-		if(flixel_FlxG.keys.checkKeyArrayState([funkin_online_OnlineMenuState.DIGIT_KEYS[6],funkin_online_OnlineMenuState.NUMPAD_KEYS[6]],2)) {
-			this.serverInput += "6";
-			this.playTick();
-			this.refreshServerInput();
-			return;
-		}
-		if(flixel_FlxG.keys.checkKeyArrayState([funkin_online_OnlineMenuState.DIGIT_KEYS[7],funkin_online_OnlineMenuState.NUMPAD_KEYS[7]],2)) {
-			this.serverInput += "7";
-			this.playTick();
-			this.refreshServerInput();
-			return;
-		}
-		if(flixel_FlxG.keys.checkKeyArrayState([funkin_online_OnlineMenuState.DIGIT_KEYS[8],funkin_online_OnlineMenuState.NUMPAD_KEYS[8]],2)) {
-			this.serverInput += "8";
-			this.playTick();
-			this.refreshServerInput();
-			return;
-		}
-		if(flixel_FlxG.keys.checkKeyArrayState([funkin_online_OnlineMenuState.DIGIT_KEYS[9],funkin_online_OnlineMenuState.NUMPAD_KEYS[9]],2)) {
-			this.serverInput += "9";
-			this.playTick();
-			this.refreshServerInput();
-			return;
-		}
-		if(flixel_FlxG.keys.checkKeyArrayState([190,110],2)) {
-			this.serverInput += ".";
-			this.playTick();
-			this.refreshServerInput();
-			return;
-		}
-		if(flixel_FlxG.keys.checkKeyArrayState([191,111],2)) {
-			this.serverInput += "/";
-			this.playTick();
-			this.refreshServerInput();
-			return;
-		}
-		var tmp;
-		if(!flixel_FlxG.keys.checkKeyArrayState([186],2)) {
-			var _this = flixel_FlxG.keys.pressed;
-			tmp = _this.keyManager.checkStatusUnsafe(16,_this.status) && flixel_FlxG.keys.checkKeyArrayState([186],2);
-		} else {
-			tmp = true;
-		}
-		if(tmp) {
-			this.serverInput += ":";
-			this.playTick();
-			this.refreshServerInput();
-			return;
-		}
-		if(flixel_FlxG.keys.checkKeyArrayState([189,109],2)) {
-			this.serverInput += "-";
-			this.playTick();
-			this.refreshServerInput();
-			return;
-		}
-		var _g = 0;
-		var _g1 = funkin_online_OnlineMenuState.LETTER_KEYS.length;
-		while(_g < _g1) {
-			var i = _g++;
-			if(flixel_FlxG.keys.checkKeyArrayState([funkin_online_OnlineMenuState.LETTER_KEYS[i]],2)) {
-				this.serverInput += funkin_online_OnlineMenuState.LETTERS.charAt(i);
-				this.playTick();
-				this.refreshServerInput();
-				return;
-			}
-		}
-		if(flixel_FlxG.keys.checkKeyArrayState([8],2) && this.serverInput.length > 0) {
-			this.serverInput = HxOverrides.substr(this.serverInput,0,this.serverInput.length - 1);
-			this.playTick();
-			this.refreshServerInput();
-			return;
-		}
-	}
-	,refreshServerInput: function() {
-		this.serverInputText.set_text(this.serverInput.length > 0 ? this.serverInput : "(type IP or hostname)");
-		this.serverInputText.set_color(this.serverInput.length > 0 ? -7861 : -6653256);
-	}
-	,submitServer: function() {
-		var _gthis = this;
-		if(this.serverInput.length == 0) {
-			this.setMode(funkin_online__$OnlineMenuState_OnlineMenuMode.Hub);
-			return;
-		}
-		this.playConfirm();
-		funkin_online_OnlineConfig.saveServer(this.serverInput);
-		funkin_online_OnlineClient.reset();
-		this.serverText.set_text("server: " + funkin_online_OnlineConfig.serverUrl);
-		funkin_online_OnlineTheme.centered(this.serverText,668);
-		this.setMode(funkin_online__$OnlineMenuState_OnlineMenuMode.Hub);
-		this.setStatus("Connecting to " + funkin_online_OnlineConfig.serverUrl + "...");
-		funkin_online_OnlineClient.ensureSession(function() {
-			if(!_gthis.gone) {
-				_gthis.setStatus("Connected as " + funkin_online_OnlineClient.playerName + ".");
-			}
-		},function(error) {
-			if(!_gthis.gone) {
-				_gthis.setStatus(error + " (check IP / firewall)",true);
-			}
-		});
 	}
 	,refreshCode: function() {
 		this.codeDigits[0].set_text(0 < this.code.length ? this.code.charAt(0) : "");
@@ -174095,24 +173895,6 @@ funkin_online_OnlineMenuState.prototype = $extend(funkin_ui_MusicBeatState.proto
 		this.status.set_text(message);
 		this.status.set_color(isError ? -38037 : -7861);
 		funkin_online_OnlineTheme.centered(this.status,500);
-	}
-	,toggleServer: function() {
-		var _gthis = this;
-		var next = funkin_online_OnlineConfig.serverUrl == funkin_online_OnlineConfig.LOCAL_SERVER ? funkin_online_OnlineConfig.DEFAULT_SERVER : funkin_online_OnlineConfig.LOCAL_SERVER;
-		funkin_online_OnlineConfig.setServer(next);
-		funkin_online_OnlineClient.reset();
-		this.serverText.set_text("server: " + funkin_online_OnlineConfig.serverUrl);
-		funkin_online_OnlineTheme.centered(this.serverText,668);
-		this.setStatus("Server switched to " + next);
-		funkin_online_OnlineClient.ensureSession(function() {
-			if(!_gthis.gone) {
-				_gthis.setStatus("Connected as " + funkin_online_OnlineClient.playerName + ".");
-			}
-		},function(error) {
-			if(!_gthis.gone) {
-				_gthis.setStatus(error,true);
-			}
-		});
 	}
 	,backToMainMenu: function() {
 		this.playCancel();
@@ -442045,10 +441827,7 @@ funkin_online_OnlineLobbyState.VARIATIONS = ["default","pico","erect","bf"];
 funkin_online_OnlineLobbyState.LETTER_KEYS = [65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90];
 funkin_online_OnlineLobbyState.LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 funkin_online_OnlineMenuState.DIGIT_KEYS = [48,49,50,51,52,53,54,55,56,57];
-funkin_online_OnlineMenuState.NUMPAD_KEYS = [96,97,98,99,100,101,102,103,104,105];
-funkin_online_OnlineMenuState.LETTER_KEYS = [65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90];
-funkin_online_OnlineMenuState.LETTERS = "abcdefghijklmnopqrstuvwxyz";
-funkin_online_OnlineMenuState.OPTIONS = ["HOST GAME","JOIN WITH CODE","FIND MATCH","SERVER IP","BACK"];
+funkin_online_OnlineMenuState.OPTIONS = ["HOST GAME","JOIN WITH CODE","FIND MATCH","BACK"];
 funkin_online_OnlineSession.lobby = null;
 funkin_online_OnlineSession.inMatch = false;
 funkin_online_OnlineSession.songId = null;
