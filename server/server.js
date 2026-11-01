@@ -32,7 +32,8 @@ const PLAYER_STALE_MS = 5 * 60 * 1000; // no poll for 5 minutes -> dropped
 const PLAYER_DISCONNECTED_MS = 30 * 1000; // shown as "reconnecting"
 const QUEUE_STALE_MS = 60 * 1000; // auto-cancel a stale queue entry
 const START_DELAY_MS = 5000; // wait after both sides load, before the song
-const LOAD_TIMEOUT_MS = 12000; // start anyway if a client never reports loaded
+const LOAD_TIMEOUT_MS = 45000; // start anyway if a client never reports loaded
+                                         // (a cold 16 MB bundle on a phone can take 30 s+)
 const MAX_JSON_BYTES = 256 * 1024;
 const MAX_SONGS = 500;
 const MODES = ['score', 'accuracy', 'misses'];

@@ -60,7 +60,15 @@ const BOOTSTRAP = `	<!-- FNF Online: which lobby server this page talks to.
 
 `;
 
+// Stamp the bundle URL with its size and mtime: a phone on the LAN (or a
+// cached tab) then cannot keep running an older build after a rebuild.
+let BUNDLE_VERSION = '0';
+try {
+  const bundleStat = fs.statSync(path.join(SRC, 'FunkinOnline.js'));
+  BUNDLE_VERSION = String(bundleStat.size) + '-' + Math.floor(bundleStat.mtimeMs);
+} catch {}
 const GAME_TAG = '<script type="text/javascript" src="./FunkinOnline.js"></script>';
+const VERSIONED_TAG = GAME_TAG.replace('./FunkinOnline.js', './FunkinOnline.js?v=' + BUNDLE_VERSION);
 const TOUCH_TAG = '\t<script type="text/javascript" src="./touch.js"></script>\r\n';
 
 function walk(dir, relative = '') {
@@ -94,7 +102,7 @@ function gamePage(html) {
     throw new Error('index.html has no FunkinOnline.js script tag — did the Lime build change?');
   }
   const stripped = html.replace(/[ \t]*<!-- FNF Online: which lobby server[\s\S]*?<\/script>\r?\n\r?\n/, '');
-  return stripped.replace(GAME_TAG, BOOTSTRAP + GAME_TAG);
+  return stripped.replace(GAME_TAG, BOOTSTRAP + VERSIONED_TAG);
 }
 
 /** Adds the on-screen controller right before the closing body tag. */
