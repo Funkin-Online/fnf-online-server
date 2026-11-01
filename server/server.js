@@ -135,6 +135,16 @@ function tryServeFile(res, filePath) {
 const ORIGIN_MARKER = 'FNF_ONLINE_SERVER=window.FNF_ONLINE_SERVER||window.location.origin';
 const ORIGIN_SCRIPT = '<script type="text/javascript">window.' + ORIGIN_MARKER + ';</script>';
 
+function decodePath(rawPath) {
+  let decoded = rawPath;
+  try {
+    decoded = decodeURIComponent(rawPath);
+  } catch {
+    // keep the raw path when it is not valid percent-encoding
+  }
+  return decoded.replace(/\0/g, '');
+}
+
 function tryServeGameFile(res, filePath) {
   if (path.extname(filePath).toLowerCase() !== '.html') return tryServeFile(res, filePath);
   try {
@@ -840,7 +850,8 @@ function createServer() {
       ];
 
       const relativePath = reqPath === '/' ? '/index.html' : reqPath;
-      const safePath = path.normalize(relativePath).replace(/^(\.\.[\/\\])+/, '');
+      const decodedPath = decodePath(relativePath);
+      const safePath = path.normalize(decodedPath).replace(/^(\.\.[\/\\])+/, '');
 
       // Check HTML5 game builds first
       for (const dir of html5Dirs) {
@@ -862,6 +873,9 @@ function createServer() {
         res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'access-control-allow-origin': '*' });
         return res.end(page);
       }
+
+      // A missing file is a 404, not an authentication failure.
+      return fail(res, 404, 'Not found');
     }
 
     route(req, res, reqPath)
