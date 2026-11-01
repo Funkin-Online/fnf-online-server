@@ -13,7 +13,7 @@ A fork of **Friday Night Funkin' V-Slice (FNF 1.0)** rebranded as **Funkin Onlin
 fnf-online/
 ├─ game/          the V-Slice source (marker: not committed — huge assets submodule)
 ├─ server/        the lobby/matchmaking server (Node, zero deps)
-├─ docs/          the built HTML5 game — this is what GitHub Pages serves
+├─ docs/          the web build — chooser, play.html, mobile.html, assets
 ├─ tools/         build-docs.js: export build -> docs/
 ├─ render.yaml    Render blueprint
 └─ .github/workflows/keepalive.yml   keeps the free Render service awake
@@ -91,6 +91,18 @@ https://funkin-online.github.io/fnf-online-server/
 ```
 
 `docs/` ships `.nojekyll` so Pages serves every asset byte-for-byte.
+
+The site root asks PC or mobile before anything loads:
+
+| Page | What it is |
+| --- | --- |
+| `index.html` | the chooser |
+| `play.html` | the game, keyboard |
+| `mobile.html` | the game plus the on-screen touch controller (`touch.js`) |
+
+On a phone the D-pad moves menus and plays the four note lanes, **A** confirms,
+**B** goes back, **SPACE** readies up, and **123** opens a number pad for lobby
+codes.
 
 To republish after changing the game:
 
