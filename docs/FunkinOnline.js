@@ -172265,7 +172265,7 @@ funkin_online_OnlineClient.post = function(path,body,onSuccess,onError) {
 		if(!settle()) {
 			return;
 		}
-		report("Could not reach " + funkin_online_OnlineConfig.serverUrl);
+		report("Could not reach " + funkin_online_OnlineConfig.serverUrl + " — is the server deployed?");
 	});
 	loader.addEventListener("securityError",function(_) {
 		if(!settle()) {
@@ -172351,7 +172351,7 @@ funkin_online_OnlineClient.update = function() {
 		} catch( _g1 ) {
 			haxe_NativeStackTrace.lastError = _g1;
 		}
-		req.onFail("The server took too long to answer.");
+		req.onFail("The server took too long to answer — a free host can need ~30s to wake. Try again.");
 	}
 };
 var funkin_online_OnlineRequest = function(loader,onFail) {
@@ -441812,7 +441812,7 @@ funkin_modding_module_ScriptedModule._isHScriptedClass = true;
 funkin_online_OnlineClient.token = null;
 funkin_online_OnlineClient.playerId = null;
 funkin_online_OnlineClient.playerName = "Player";
-funkin_online_OnlineClient.REQUEST_TIMEOUT_MS = 12000;
+funkin_online_OnlineClient.REQUEST_TIMEOUT_MS = 45000;
 funkin_online_OnlineClient.requests = [];
 funkin_online_OnlineConfig.DEFAULT_SERVER = "https://fnf-online-server.onrender.com";
 funkin_online_OnlineConfig.LOCAL_SERVER = "http://localhost:8080";

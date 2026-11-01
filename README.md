@@ -72,7 +72,7 @@ to confirm the new URL answers).
 ### Keep it awake
 
 Free services sleep after ~15 minutes idle and the first request then takes
-~30 s — longer than the game's 12 s timeout. `.github/workflows/keepalive.yml`
+~30 s, which is why the client waits 45 s before giving up. `.github/workflows/keepalive.yml`
 pings `/healthz` every 10 minutes so that stops happening. It needs no setup
 unless your service URL differs, in which case set the Actions **variable**
 `FNF_SERVER_URL` (Settings → Secrets and variables → Actions → Variables).
