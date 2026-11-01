@@ -172824,6 +172824,12 @@ funkin_online_OnlineLobbyState.prototype = $extend(funkin_ui_MusicBeatState.prot
 		header.set_x(48);
 		header.set_y(40);
 		this.add(header);
+		this.add(funkin_online_OnlineTheme.panel(0,0,flixel_FlxG.width,26,-46120));
+		var banner = funkin_online_OnlineTheme.text(14,-16055277);
+		banner.set_text("FRIDAY NIGHT FUNKIN  ·  ONLINE 1V1");
+		banner.set_x(16);
+		banner.set_y(3);
+		this.add(banner);
 		this.add(funkin_online_OnlineTheme.panel(32,100,640,560));
 		this.listTitle = funkin_online_OnlineTheme.text(22,-7861);
 		this.listTitle.set_text("PICK YOUR SONGS");
@@ -173013,11 +173019,11 @@ funkin_online_OnlineLobbyState.prototype = $extend(funkin_ui_MusicBeatState.prot
 			var picks = this.arr(Reflect.field(you,"picks"));
 			youPicks = picks.length;
 		}
-		this.youText.set_text("" + youName + "  " + this.roleLabel(funkin_online_OnlineSession.role(),funkin_online_OnlineSession.side()) + "  " + (youReady ? "[READY]" : "[not ready]") + ("   picks: " + youPicks));
+		this.youText.set_text("1P  " + youName + "   " + this.sideLabel(funkin_online_OnlineSession.side()) + "   " + (youReady ? "[ READY! ]" : "[ not ready ]") + ("   picks: " + youPicks));
 		this.youText.set_color(youReady ? -11796571 : -1);
 		var opp = funkin_online_OnlineSession.opponent();
 		if(opp == null) {
-			this.oppText.set_text("OPPONENT: waiting for someone to join...");
+			this.oppText.set_text("2P  WAITING FOR A PLAYER...");
 			this.oppText.set_color(-6653256);
 		} else {
 			var tmp = Reflect.field(opp,"name");
@@ -173029,7 +173035,7 @@ funkin_online_OnlineLobbyState.prototype = $extend(funkin_ui_MusicBeatState.prot
 			var oppRole = Std.string(tmp != null ? tmp : "opponent");
 			var tmp = Reflect.field(opp,"side");
 			var oppSide = Std.string(tmp != null ? tmp : "left");
-			this.oppText.set_text("" + name + "  " + this.roleLabel(oppRole,oppSide) + "  " + (ready ? "[READY]" : "[not ready]") + ("   picks: " + picks) + (connected ? "" : "   (reconnecting)"));
+			this.oppText.set_text("2P  " + name + "   " + this.sideLabel(oppSide) + "   " + (ready ? "[ READY! ]" : "[ not ready ]") + ("   picks: " + picks) + (connected ? "" : "   (reconnecting)"));
 			this.oppText.set_color(connected ? -46120 : -38037);
 		}
 	}
@@ -173068,11 +173074,11 @@ funkin_online_OnlineLobbyState.prototype = $extend(funkin_ui_MusicBeatState.prot
 		switch(phase) {
 		case "countdown":
 			var ms = funkin_online_OnlineSession.numberField(this.lobby,"countdownMs");
-			this.phaseText.set_text("STARTING IN " + Std.string(Math.ceil(ms / 1000)) + "...");
+			this.phaseText.set_text("[ STARTING IN " + Std.string(Math.ceil(ms / 1000)) + " ]");
 			this.phaseText.set_color(-7861);
 			break;
 		case "loading":
-			this.phaseText.set_text("Both ready — loading the song on both sides...");
+			this.phaseText.set_text("[ LOADING ON BOTH SIDES ]");
 			this.phaseText.set_color(-7861);
 			break;
 		case "picking":
@@ -173085,16 +173091,16 @@ funkin_online_OnlineLobbyState.prototype = $extend(funkin_ui_MusicBeatState.prot
 					this.phaseText.set_text("Host is BF/Pico (right). Guest is opponent (left).\nPick songs, set difficulty, then SPACE to ready.");
 				}
 			} else {
-				this.phaseText.set_text("Both ready! Starting...");
+				this.phaseText.set_text("[ BOTH READY — STARTING ]");
 			}
 			this.phaseText.set_color(-6653256);
 			break;
 		case "playing":
-			this.phaseText.set_text("SONG IN PROGRESS");
+			this.phaseText.set_text("[ SONG IN PROGRESS ]");
 			this.phaseText.set_color(-11796571);
 			break;
 		case "results":
-			this.phaseText.set_text("MATCH FINISHED");
+			this.phaseText.set_text("[ MATCH FINISHED ]");
 			this.phaseText.set_color(-11796571);
 			break;
 		default:
@@ -173147,7 +173153,7 @@ funkin_online_OnlineLobbyState.prototype = $extend(funkin_ui_MusicBeatState.prot
 			var mine = this.contains(youPicks,id);
 			var theirs = this.contains(oppPicks,id);
 			row.set_visible(true);
-			row.set_text((index == this.selection ? "> " : "  ") + (mine ? "[X] " : "[ ] ") + name + (mine ? "  YOU" : "") + (theirs ? "  OPP" : ""));
+			row.set_text((index == this.selection ? "> " : "  ") + (mine ? "[*] " : "[ ] ") + name + (mine ? "  <YOU>" : "") + (theirs ? "  <OPP>" : ""));
 			row.set_color(index == this.selection ? -7861 : mine ? -11796571 : -1);
 		}
 	}
@@ -173334,6 +173340,13 @@ funkin_online_OnlineLobbyState.prototype = $extend(funkin_ui_MusicBeatState.prot
 			fh.set_text(fh.text + "  — host decides");
 		}
 	}
+	,sideLabel: function(side) {
+		if(side == "left") {
+			return "LEFT · PLAYER 2";
+		} else {
+			return "RIGHT · PLAYER 1";
+		}
+	}
 	,roleLabel: function(role,side) {
 		if(role == "player") {
 			return "[BF/PICO · RIGHT]";
@@ -173502,11 +173515,23 @@ funkin_online_OnlineLobbyState.prototype = $extend(funkin_ui_MusicBeatState.prot
 		return song;
 	}
 	,startMatch: function() {
+		try {
+			this.startMatchInner();
+		} catch( _g ) {
+			haxe_NativeStackTrace.lastError = _g;
+			var e = haxe_Exception.caught(_g).unwrap();
+			this.started = false;
+			this.startedAt = 0;
+			this.statusText.set_text("Could not open the song: " + Std.string(e));
+		}
+	}
+	,startMatchInner: function() {
 		if(this.started) {
 			return;
 		}
 		var song = Reflect.field(this.lobby,"song");
 		if(song == null) {
+			this.statusText.set_text("Waiting for the server to pick a song...");
 			return;
 		}
 		var songId = Std.string(Reflect.field(song,"id"));
@@ -173534,7 +173559,7 @@ funkin_online_OnlineLobbyState.prototype = $extend(funkin_ui_MusicBeatState.prot
 		funkin_online_OnlinePerf.apply();
 		funkin_online_OnlineSession.lastError = null;
 		var chart = funkin_online_OnlineSongs.resolveChart(songId,funkin_online_OnlineSession.difficulty(),funkin_online_OnlineSession.variation());
-		haxe_Log.trace("[online] starting " + songId + " (" + chart.difficulty + "/" + chart.variation + ") as " + funkin_online_OnlineSession.role(),{ fileName : "source/funkin/online/OnlineLobbyState.hx", lineNumber : 814, className : "funkin.online.OnlineLobbyState", methodName : "startMatch"});
+		haxe_Log.trace("[online] starting " + songId + " (" + chart.difficulty + "/" + chart.variation + ") as " + funkin_online_OnlineSession.role(),{ fileName : "source/funkin/online/OnlineLobbyState.hx", lineNumber : 848, className : "funkin.online.OnlineLobbyState", methodName : "startMatchInner"});
 		flixel_addons_transition_FlxTransitionableState.skipNextTransIn = true;
 		flixel_addons_transition_FlxTransitionableState.skipNextTransOut = true;
 		try {
