@@ -68,6 +68,11 @@
   <h1>FNF <span>ONLINE</span> server tester</h1>
   <p class="sub">Open this page twice (two browser windows, or one normal + one incognito) to simulate two players.</p>
 
+  <div style="margin-bottom:14px;display:flex;gap:12px;align-items:center;">
+    <a href="/" style="display:inline-block;padding:8px 16px;background:var(--pink);color:#22001c;border-radius:8px;font-weight:700;text-decoration:none;">▶ Play Funkin Online in Browser</a>
+    <span style="color:var(--dim);font-size:13px;">(Loads the full game if built)</span>
+  </div>
+
   <div class="panel" id="setup">
     <div class="row">
       <div style="flex:1;min-width:220px">
@@ -104,6 +109,7 @@
       <div>
         <label>Find a random opponent</label>
         <button class="warn" id="findBtn" disabled>Find match</button>
+        <button id="cancelFindBtn" class="hidden">Cancel search</button>
       </div>
       <div class="spacer"></div>
       <div>
@@ -247,12 +253,28 @@
       const json = await api('/api/lobby/state');
       state.queued = json.queued;
       if (json.lobby) {
-        state.lobby = json.lobby;
-        $('lobbyPanel').classList.remove('hidden');
-        render();
+        if (!state.lobby) {
+          setStatus('findStatus', '');
+          $('cancelFindBtn').classList.add('hidden');
+          $('findBtn').disabled = false;
+          enterLobby(json.lobby);
+        } else {
+          state.lobby = json.lobby;
+          $('lobbyPanel').classList.remove('hidden');
+          render();
+        }
       } else {
         state.lobby = null;
-        if (state.queued) setStatus('findStatus', 'Searching for an opponent… keep this tab open.');
+        if (state.queued) {
+          setStatus('findStatus', 'Searching for an opponent… keep this tab open.');
+          $('cancelFindBtn').classList.remove('hidden');
+        } else if ($('findStatus').textContent.includes('Searching') || $('findStatus').textContent.includes('Queued')) {
+          setStatus('findStatus', 'Search stopped.');
+          $('cancelFindBtn').classList.add('hidden');
+          $('findBtn').disabled = false;
+          clearInterval(state.timer);
+          state.timer = null;
+        }
       }
     } catch (e) {
       log('poll: ' + e.message);
@@ -328,13 +350,35 @@
     api('/api/lobby/join', { code: $('joinCode').value, songs: CATALOG })
       .then((j) => enterLobby(j.lobby))
       .catch((e) => setStatus('joinStatus', e.message, true));
-  $('findBtn').onclick = () =>
+  $('findBtn').onclick = () => {
+    $('findBtn').disabled = true;
     api('/api/match/find', { songs: CATALOG })
       .then((j) => {
-        if (j.matched) enterLobby(j.lobby);
-        else setStatus('findStatus', 'Queued. Open another window and press Find too.');
+        if (j.matched) {
+          $('findBtn').disabled = false;
+          $('cancelFindBtn').classList.add('hidden');
+          enterLobby(j.lobby);
+        } else {
+          setStatus('findStatus', 'Queued. Searching for an opponent...');
+          $('cancelFindBtn').classList.remove('hidden');
+          if (!state.timer) state.timer = setInterval(poll, 800);
+        }
       })
-      .catch((e) => setStatus('findStatus', e.message, true));
+      .catch((e) => {
+        $('findBtn').disabled = false;
+        setStatus('findStatus', e.message, true);
+      });
+  };
+
+  $('cancelFindBtn').onclick = () => {
+    api('/api/match/cancel').catch(() => {});
+    clearInterval(state.timer);
+    state.timer = null;
+    state.queued = false;
+    $('cancelFindBtn').classList.add('hidden');
+    $('findBtn').disabled = false;
+    setStatus('findStatus', 'Match search cancelled.');
+  };
 
   $('leaveBtn').onclick = async () => {
     await api('/api/lobby/leave').catch(() => {});

@@ -18,6 +18,9 @@
 
 const http = require('node:http');
 const crypto = require('node:crypto');
+const os = require('node:os');
+const fs = require('node:fs');
+const path = require('node:path');
 
 // --------------------------------------------------------------------------
 // Tunables
@@ -25,13 +28,15 @@ const crypto = require('node:crypto');
 
 const MAX_PLAYERS = 2; // hard 1v1 cap
 const LOBBY_IDLE_MS = 10 * 60 * 1000; // empty lobbies are reaped after this
-const PLAYER_STALE_MS = 90 * 1000; // no poll for this long -> dropped
-const PLAYER_DISCONNECTED_MS = 15 * 1000; // shown as "reconnecting"
+const PLAYER_STALE_MS = 5 * 60 * 1000; // no poll for 5 minutes -> dropped
+const PLAYER_DISCONNECTED_MS = 30 * 1000; // shown as "reconnecting"
 const QUEUE_STALE_MS = 60 * 1000; // auto-cancel a stale queue entry
 const START_DELAY_MS = 4000; // countdown before phase flips to "playing"
 const MAX_JSON_BYTES = 256 * 1024;
 const MAX_SONGS = 500;
 const MODES = ['score', 'accuracy', 'misses'];
+const DIFFICULTIES = ['easy', 'normal', 'hard', 'erect', 'nightmare'];
+const VARIATIONS = ['default', 'pico', 'erect', 'bf'];
 
 // --------------------------------------------------------------------------
 // State
@@ -53,6 +58,70 @@ const startedAt = Date.now();
 // --------------------------------------------------------------------------
 
 const now = () => Date.now();
+
+function getLocalIps() {
+  const nets = os.networkInterfaces();
+  const list = [];
+  for (const name of Object.keys(nets)) {
+    const isVirtual = /virtual|vbox|vmware|vethernet|hyper-v|default switch/i.test(name);
+    for (const net of nets[name] || []) {
+      if ((net.family === 'IPv4' || net.family === 4) && !net.internal) {
+        const isVirtualIp = isVirtual || net.address.startsWith('192.168.56.') || net.address.startsWith('169.254.');
+        const isWifi = /wi-?fi|wlan|wireless/i.test(name);
+        const isEth = /ethernet|eth|en/i.test(name);
+        list.push({
+          address: net.address,
+          name,
+          priority: isVirtualIp ? 0 : (isWifi ? 3 : (isEth ? 2 : 1)),
+        });
+      }
+    }
+  }
+  list.sort((a, b) => b.priority - a.priority);
+  return list.map((item) => item.address);
+}
+
+const MIME_TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'application/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.svg': 'image/svg+xml',
+  '.ogg': 'audio/ogg',
+  '.mp3': 'audio/mpeg',
+  '.wav': 'audio/wav',
+  '.ttf': 'font/ttf',
+  '.otf': 'font/otf',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.wasm': 'application/wasm',
+  '.map': 'application/json',
+  '.txt': 'text/plain; charset=utf-8',
+};
+
+function tryServeFile(res, filePath) {
+  try {
+    if (!fs.existsSync(filePath)) return false;
+    const stat = fs.statSync(filePath);
+    if (!stat.isFile()) return false;
+    const ext = path.extname(filePath).toLowerCase();
+    const contentType = MIME_TYPES[ext] || 'application/octet-stream';
+    res.writeHead(200, {
+      'content-type': contentType,
+      'content-length': stat.size,
+      'access-control-allow-origin': '*',
+      'cache-control': ext === '.html' ? 'no-cache' : 'public, max-age=3600',
+    });
+    fs.createReadStream(filePath).pipe(res);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function randomToken() {
   return crypto.randomBytes(24).toString('hex');
@@ -139,6 +208,20 @@ function lobbyCatalog(lobby) {
   return result;
 }
 
+function sanitizeHits(raw) {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  for (const hit of raw.slice(-48)) {
+    if (!hit || typeof hit !== 'object') continue;
+    out.push({
+      t: Math.max(0, Math.min(10_000_000, Math.round(Number(hit.t) || 0))),
+      d: Math.max(0, Math.min(3, Math.round(Number(hit.d) || 0))),
+      h: hit.h ? 1 : 0,
+    });
+  }
+  return out;
+}
+
 function pickPool(lobby) {
   const pool = new Set();
   for (const set of lobby.picks.values()) {
@@ -152,6 +235,8 @@ function createLobby(host, { matchmade = false } = {}) {
     code: newCode(),
     hostId: host.id,
     mode: 'score', // "find match" always compares score
+    difficulty: 'normal',
+    variation: 'default',
     phase: 'picking', // picking | countdown | playing | results
     playerIds: [host.id],
     picks: new Map(), // playerId -> Set(songId)
@@ -159,6 +244,7 @@ function createLobby(host, { matchmade = false } = {}) {
     song: null,
     startAt: 0,
     results: new Map(), // playerId -> stats
+    live: new Map(), // playerId -> current in-song HUD state
     winnerId: null,
     forfeit: false,
     matchmade,
@@ -222,10 +308,16 @@ function startSong(lobby, forced) {
 
   const catalog = lobbyCatalog(lobby);
   const songId = pool[crypto.randomInt(0, pool.length)];
-  lobby.song = { id: songId, name: catalog.get(songId) || songId, difficulty: 'normal' };
+  lobby.song = {
+    id: songId,
+    name: catalog.get(songId) || songId,
+    difficulty: lobby.difficulty || 'normal',
+    variation: lobby.variation || 'default',
+  };
   lobby.phase = 'countdown';
   lobby.startAt = now() + START_DELAY_MS;
   lobby.results.clear();
+  lobby.live.clear();
   lobby.winnerId = null;
   lobby.forfeit = false;
   lobby.updatedAt = now();
@@ -291,6 +383,8 @@ function snapshot(lobby, viewer) {
       isHost: you === lobby.hostId,
       ready: !!lobby.ready.get(you),
       picks: [...(lobby.picks.get(you) ?? [])],
+      side: you === lobby.hostId ? 'right' : 'left',
+      role: you === lobby.hostId ? 'player' : 'opponent',
     },
     players: list.map((p) => ({
       id: p.id,
@@ -300,8 +394,13 @@ function snapshot(lobby, viewer) {
       picks: [...(lobby.picks.get(p.id) ?? [])],
       connected: now() - p.lastSeen < PLAYER_DISCONNECTED_MS,
       stats: lobby.results.get(p.id) ?? null,
+      live: lobby.live.get(p.id) ?? { score: 0, misses: 0, combo: 0, animation: 'idle', hits: [] },
+      side: p.id === lobby.hostId ? 'right' : 'left',
+      role: p.id === lobby.hostId ? 'player' : 'opponent',
     })),
     catalog: [...lobbyCatalog(lobby)].map(([id, name]) => ({ id, name })),
+    difficulty: lobby.difficulty || 'normal',
+    variation: lobby.variation || 'default',
     song: lobby.song,
     startAt: lobby.startAt,
     serverTime: now(),
@@ -343,12 +442,12 @@ function tick() {
     }
   }
 
-  // Expire abandoned queues.
+  // Expire abandoned queues (no poll for PLAYER_DISCONNECTED_MS).
   queue = queue.filter((id) => {
     const p = players.get(id);
     if (!p) return false;
     if (p.queuedAt == null) return false;
-    if (t - p.queuedAt > QUEUE_STALE_MS) {
+    if (t - p.lastSeen > PLAYER_DISCONNECTED_MS) {
       p.queuedAt = null;
       return false;
     }
@@ -526,8 +625,8 @@ async function route(req, res, path) {
         player.queuedAt = null;
         const lobby = createLobby(other, { matchmade: true });
         lobby.playerIds.push(player.id);
-        lobby.ready.set(other.id, true);
-        lobby.ready.set(player.id, true);
+        lobby.ready.set(other.id, false);
+        lobby.ready.set(player.id, false);
         player.lobby = lobby.code;
         lobby.mode = 'score';
         lobby.updatedAt = now();
@@ -560,7 +659,12 @@ async function route(req, res, path) {
       const lobby = roomFor(player);
       if (!lobby) return fail(res, 404, 'You are not in a lobby.');
       if (lobby.phase !== 'picking') return fail(res, 409, 'Cannot change ready state right now.');
-      lobby.ready.set(player.id, body.ready !== false);
+      const isReadying = body.ready !== false;
+      const myPicks = lobby.picks.get(player.id)?.size || 0;
+      if (isReadying && myPicks === 0 && pickPool(lobby).length === 0) {
+        return fail(res, 400, 'Pick at least one song before readying up.');
+      }
+      lobby.ready.set(player.id, isReadying);
       lobby.updatedAt = now();
       maybeAutoStart(lobby);
       return send(res, 200, { ok: true, lobby: snapshot(lobby, player) });
@@ -574,6 +678,23 @@ async function route(req, res, path) {
       if (!MODES.includes(body.mode)) return fail(res, 400, `mode must be one of ${MODES.join(', ')}`);
       if (lobby.phase !== 'picking') return fail(res, 409, 'Cannot change the mode after the song starts.');
       lobby.mode = body.mode;
+      lobby.updatedAt = now();
+      return send(res, 200, { ok: true, lobby: snapshot(lobby, player) });
+    }
+
+    case '/api/lobby/difficulty': {
+      const lobby = roomFor(player);
+      if (!lobby) return fail(res, 404, 'You are not in a lobby.');
+      if (player.id !== lobby.hostId) return fail(res, 403, 'Only the host can change the difficulty.');
+      if (lobby.phase !== 'picking') return fail(res, 409, 'Cannot change difficulty after the song starts.');
+      if (body.difficulty && !DIFFICULTIES.includes(body.difficulty)) {
+        return fail(res, 400, `difficulty must be one of ${DIFFICULTIES.join(', ')}`);
+      }
+      if (body.variation && !VARIATIONS.includes(body.variation)) {
+        return fail(res, 400, `variation must be one of ${VARIATIONS.join(', ')}`);
+      }
+      if (body.difficulty) lobby.difficulty = body.difficulty;
+      if (body.variation) lobby.variation = body.variation;
       lobby.updatedAt = now();
       return send(res, 200, { ok: true, lobby: snapshot(lobby, player) });
     }
@@ -603,6 +724,23 @@ async function route(req, res, path) {
         submittedAt: now(),
       });
       compareResults(lobby);
+      return send(res, 200, { ok: true, lobby: snapshot(lobby, player) });
+    }
+
+    // Lightweight polling channel used by the duel HUD. Clients submit their
+    // current tally and receive the opponent's latest state in the snapshot.
+    case '/api/lobby/live': {
+      const lobby = roomFor(player);
+      if (!lobby) return fail(res, 404, 'You are not in a lobby.');
+      if (lobby.phase !== 'playing') return fail(res, 409, 'The match is not running.');
+      lobby.live.set(player.id, {
+        score: Math.max(0, Math.min(100_000_000, Math.round(Number(body.score) || 0))),
+        misses: Math.max(0, Math.min(100_000, Math.round(Number(body.misses) || 0))),
+        combo: Math.max(0, Math.min(100_000, Math.round(Number(body.combo) || 0))),
+        animation: typeof body.animation === 'string' ? body.animation.slice(0, 40) : 'idle',
+        hits: sanitizeHits(body.hits),
+      });
+      lobby.updatedAt = now();
       return send(res, 200, { ok: true, lobby: snapshot(lobby, player) });
     }
 
@@ -642,23 +780,58 @@ function createServer() {
       return res.end();
     }
 
-    let path;
+    let reqPath;
     try {
-      path = new URL(req.url, 'http://localhost').pathname;
+      reqPath = new URL(req.url, 'http://localhost').pathname;
     } catch {
       return fail(res, 400, 'Bad URL');
     }
 
-    // Root serves a tiny manual test client (also handy for poking a deploy).
-    if (path === '/' && req.method === 'GET') {
-      const page = require('node:fs').readFileSync(require('node:path').join(__dirname, 'public', 'index.html'), 'utf8');
-      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+    // Tester endpoint
+    if ((reqPath === '/test' || reqPath === '/tester' || reqPath === '/test/' || reqPath === '/tester/') && req.method === 'GET') {
+      const page = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'access-control-allow-origin': '*' });
       return res.end(page);
     }
 
-    route(req, res, path)
+    // Serve static files or game files on GET requests (non-API)
+    if (req.method === 'GET' && !reqPath.startsWith('/api/') && reqPath !== '/healthz') {
+      // docs/ is the web build that ships in the repo: GitHub Pages serves it
+      // and this server serves it too, so one push hosts both.
+      const html5Dirs = [
+        path.resolve(__dirname, '..', 'docs'),
+        path.resolve(__dirname, '..', 'game', 'export', 'release', 'html5', 'bin'),
+        path.resolve(__dirname, '..', 'game', 'export', 'debug', 'html5', 'bin'),
+      ];
+
+      const relativePath = reqPath === '/' ? '/index.html' : reqPath;
+      const safePath = path.normalize(relativePath).replace(/^(\.\.[\/\\])+/, '');
+
+      // Check HTML5 game builds first
+      for (const dir of html5Dirs) {
+        const target = path.join(dir, safePath);
+        if (target.startsWith(dir) && tryServeFile(res, target)) {
+          return;
+        }
+      }
+
+      // Check server public directory
+      const publicTarget = path.join(__dirname, 'public', safePath);
+      if (publicTarget.startsWith(path.join(__dirname, 'public')) && tryServeFile(res, publicTarget)) {
+        return;
+      }
+
+      // Fallback for root: serve public index.html tester
+      if (reqPath === '/') {
+        const page = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
+        res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'access-control-allow-origin': '*' });
+        return res.end(page);
+      }
+    }
+
+    route(req, res, reqPath)
       .catch((err) => {
-        console.error('[fnf-online] request failed', path, err);
+        console.error('[fnf-online] request failed', reqPath, err);
         if (!res.headersSent) fail(res, 400, err.message || 'Bad request');
         else res.end();
       });
@@ -669,11 +842,34 @@ if (require.main === module) {
   const port = Number(process.env.PORT) || 8080;
   const server = createServer();
   server.listen(port, '0.0.0.0', () => {
-    console.log(`[fnf-online] listening on http://0.0.0.0:${port}`);
+    const ips = getLocalIps();
+    console.log('\n===============================================================');
+    console.log('  FNF ONLINE MULTIPLAYER SERVER');
+    console.log('===============================================================');
+    console.log(`  Local (this machine):    http://localhost:${port}`);
+    if (ips.length > 0) {
+      for (const ip of ips) {
+        console.log(`  Network (other devices): http://${ip}:${port}`);
+      }
+    } else {
+      console.log(`  Network (other devices): http://<Your-LAN-IP>:${port}`);
+    }
+    console.log('---------------------------------------------------------------');
+    console.log(`  * Tester page:           http://localhost:${port}/test`);
+    console.log(`  * Web game (HTML5):      http://localhost:${port}/`);
+    console.log('===============================================================\n');
+
+    const primaryIp = ips[0] || 'localhost';
+    const serverUrl = `http://${primaryIp}:${port}`;
+    try {
+      fs.writeFileSync(path.resolve(__dirname, '..', 'server.txt'), serverUrl + '\n', 'utf8');
+      fs.writeFileSync(path.resolve(__dirname, '..', 'game', 'server.txt'), serverUrl + '\n', 'utf8');
+      console.log(`[fnf-online] Wrote server.txt -> ${serverUrl}\n`);
+    } catch (_) {}
   });
   const shutdown = () => server.close(() => process.exit(0));
   process.on('SIGTERM', shutdown);
   process.on('SIGINT', shutdown);
 }
 
-module.exports = { createServer, compareResults, MODES };
+module.exports = { createServer, compareResults, MODES, DIFFICULTIES };

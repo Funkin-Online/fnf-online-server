@@ -1,0 +1,23 @@
+# --- The game source (a FNF V-Slice fork). It is its own git repo with two
+# --- huge submodules (assets ~760 MB), so it is never committed here.
+game/
+
+# --- Local scratch / previous one-off deploy copies
+render-upload/
+online-art-backup/
+rep/
+server.txt
+_patch.js
+*.log
+*.zip
+build-lime.log
+
+# --- Node
+node_modules/
+npm-debug.log*
+
+# --- Editor / OS noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

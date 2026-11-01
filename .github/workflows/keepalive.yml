@@ -1,0 +1,44 @@
+# Keeps the free Render service awake.
+#
+# Render's free plan puts a service to sleep after ~15 minutes with no traffic,
+# and the first request after that takes ~30 s — longer than the game's 12 s
+# timeout. This workflow pings /healthz every 10 minutes so you never have to
+# look at a "the server took too long to answer" message again.
+#
+# Optional: set the repo variable FNF_SERVER_URL (Settings > Secrets and
+# variables > Actions > Variables) if your service has a different URL.
+
+name: keep-server-awake
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: keep-alive
+  cancel-in-progress: true
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping the lobby server
+        env:
+          FNF_SERVER_URL: ${{ vars.FNF_SERVER_URL }}
+        run: |
+          url="${FNF_SERVER_URL:-https://fnf-online-server.onrender.com}"
+          url="${url%/}"
+          echo "Pinging $url/healthz"
+          for attempt in 1 2 3; do
+            if curl -fsS --max-time 60 "$url/healthz"; then
+              echo
+              echo "Server is awake."
+              exit 0
+            fi
+            echo "Attempt $attempt failed; waiting 20s for a cold start..."
+            sleep 20
+          done
+          echo "Server did not answer. Check Render: https://dashboard.render.com" >&2
+          exit 1
