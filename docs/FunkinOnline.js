@@ -172784,6 +172784,7 @@ var funkin_online_OnlineLobbyState = function() {
 	this.search = "";
 	this.scroll = 0;
 	this.selection = 0;
+	this.rowCapsules = [];
 	this.songRows = [];
 	this.startedAt = 0;
 	this.nameEditor = new funkin_online_NameEditor();
@@ -172809,6 +172810,7 @@ funkin_online_OnlineLobbyState.prototype = $extend(funkin_ui_MusicBeatState.prot
 	,hintText: null
 	,listTitle: null
 	,songRows: null
+	,rowCapsules: null
 	,selection: null
 	,scroll: null
 	,search: null
@@ -172851,9 +172853,28 @@ funkin_online_OnlineLobbyState.prototype = $extend(funkin_ui_MusicBeatState.prot
 		var _g1 = funkin_online_OnlineLobbyState.ROWS;
 		while(_g < _g1) {
 			var i = _g++;
+			var capsule = new flixel_FlxSprite(56,funkin_online_OnlineLobbyState.LIST_TOP + i * funkin_online_OnlineLobbyState.ROW_H - 4);
+			capsule.set_frames(funkin_Paths.getSparrowAtlas("freeplay/freeplayCapsule/capsule/freeplayCapsule"));
+			capsule.animation.addByPrefix("selected","mp3 capsule w backing0",24);
+			capsule.animation.addByPrefix("unselected","mp3 capsule w backing NOT SELECTED",24);
+			capsule.animation.play("unselected");
+			var fit = (funkin_online_OnlineLobbyState.ROW_H - 10) / Math.max(1,capsule.get_height());
+			var x = fit;
+			var y = fit;
+			if(y == null) {
+				y = 0;
+			}
+			if(x == null) {
+				x = 0;
+			}
+			capsule.scale.set(x,y);
+			capsule.updateHitbox();
+			capsule.set_visible(false);
+			this.add(capsule);
+			this.rowCapsules.push(capsule);
 			var row = funkin_online_OnlineTheme.text(18,-1);
-			row.set_x(56);
-			row.set_y(funkin_online_OnlineLobbyState.LIST_TOP + i * funkin_online_OnlineLobbyState.ROW_H);
+			row.set_x(78);
+			row.set_y(funkin_online_OnlineLobbyState.LIST_TOP + i * funkin_online_OnlineLobbyState.ROW_H + 1);
 			row.set_visible(false);
 			this.add(row);
 			this.songRows.push(row);
@@ -173151,6 +173172,9 @@ funkin_online_OnlineLobbyState.prototype = $extend(funkin_ui_MusicBeatState.prot
 			var index = this.scroll + i;
 			if(index >= list.length) {
 				row.set_visible(false);
+				if(this.rowCapsules[i] != null) {
+					this.rowCapsules[i].set_visible(false);
+				}
 				continue;
 			}
 			var song = list[index];
@@ -173159,6 +173183,11 @@ funkin_online_OnlineLobbyState.prototype = $extend(funkin_ui_MusicBeatState.prot
 			var mine = this.contains(youPicks,id);
 			var theirs = this.contains(oppPicks,id);
 			row.set_visible(true);
+			var capsule = this.rowCapsules[i];
+			if(capsule != null) {
+				capsule.set_visible(true);
+				capsule.animation.play(index == this.selection ? "selected" : "unselected");
+			}
 			row.set_text((index == this.selection ? "> " : "  ") + (mine ? "[*] " : "[ ] ") + name + (mine ? "  <YOU>" : "") + (theirs ? "  <OPP>" : ""));
 			row.set_color(index == this.selection ? -7861 : mine ? -11796571 : -1);
 		}
@@ -173565,7 +173594,7 @@ funkin_online_OnlineLobbyState.prototype = $extend(funkin_ui_MusicBeatState.prot
 		funkin_online_OnlinePerf.apply();
 		funkin_online_OnlineSession.lastError = null;
 		var chart = funkin_online_OnlineSongs.resolveChart(songId,funkin_online_OnlineSession.difficulty(),funkin_online_OnlineSession.variation());
-		haxe_Log.trace("[online] starting " + songId + " (" + chart.difficulty + "/" + chart.variation + ") as " + funkin_online_OnlineSession.role(),{ fileName : "source/funkin/online/OnlineLobbyState.hx", lineNumber : 856, className : "funkin.online.OnlineLobbyState", methodName : "startMatchInner"});
+		haxe_Log.trace("[online] starting " + songId + " (" + chart.difficulty + "/" + chart.variation + ") as " + funkin_online_OnlineSession.role(),{ fileName : "source/funkin/online/OnlineLobbyState.hx", lineNumber : 881, className : "funkin.online.OnlineLobbyState", methodName : "startMatchInner"});
 		flixel_addons_transition_FlxTransitionableState.skipNextTransIn = true;
 		flixel_addons_transition_FlxTransitionableState.skipNextTransOut = true;
 		try {
