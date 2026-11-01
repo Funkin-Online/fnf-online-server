@@ -8,12 +8,18 @@
  *   1. copies game/export/debug/html5/bin into docs/
  *   2. drops the source map (6 MB) and the cutscene videos (130 MB) — the web
  *      build never plays them online and they blow past the Pages size budget
- *   3. rewrites docs/index.html so the page tells the game which lobby server
- *      to use (window.FNF_ONLINE_SERVER) and warms a sleeping Render service
+ *   3. writes three pages from that one build:
+ *        index.html   the PC / mobile chooser (tools/landing.html)
+ *        play.html    the game, keyboard
+ *        mobile.html  the game plus the touch controller (tools/touch-controls.js)
  *   4. writes .nojekyll so Pages serves every asset verbatim
  *
- * The server URL comes from FNF_SERVER_URL, or the Render name used by
- * render.yaml. Change it here and re-run to point the web build elsewhere.
+ * One build for both pages on purpose: a native-style mobile compile needs
+ * `-Dmobile`, which Lime cannot build for HTML5 (`Type not found : GLObject`),
+ * and a second copy of the 644 MB asset folder would break the Pages limit.
+ *
+ * Every page sets window.FNF_ONLINE_SERVER so a static host still finds the
+ * lobby server; FNF_SERVER_URL overrides it.
  */
 
 'use strict';
@@ -24,12 +30,38 @@ const path = require('node:path');
 const ROOT = path.resolve(__dirname, '..');
 const SRC = path.join(ROOT, 'game', 'export', 'debug', 'html5', 'bin');
 const OUT = path.join(ROOT, 'docs');
+const LANDING = path.join(__dirname, 'landing.html');
+const TOUCH = path.join(__dirname, 'touch-controls.js');
 
 const SERVER_URL = (process.env.FNF_SERVER_URL || 'https://fnf-online-server.onrender.com').replace(/\/+$/, '');
 
 // Cutscene videos only: 130 MB that the online flow never loads.
 const SKIP_DIRS = new Set([path.join('assets', 'videos')]);
 const SKIP_EXT = new Set(['.map']);
+
+const BOOTSTRAP = `	<!-- FNF Online: which lobby server this page talks to.
+	     Change this line and re-run tools/build-docs.js to point the build
+	     somewhere else, or open the page with ?server=https://your-host
+	     to switch without rebuilding (the choice is remembered). -->
+	<script type="text/javascript">
+		window.FNF_ONLINE_SERVER = window.FNF_ONLINE_SERVER || '${SERVER_URL}';
+		(function () {
+			try {
+				var match = /[?&]server=([^&]+)/.exec(window.location.search);
+				if (match) {
+					var chosen = decodeURIComponent(match[1]).replace(/\\/+$/, '');
+					if (chosen && !/^https?:\\/\\//.test(chosen)) chosen = 'https://' + chosen;
+					window.FNF_ONLINE_SERVER = chosen;
+					window.localStorage.setItem('fnfOnlineServer', chosen);
+				}
+			} catch (e) {}
+		})();
+	</script>
+
+`;
+
+const GAME_TAG = '<script type="text/javascript" src="./FunkinOnline.js"></script>';
+const TOUCH_TAG = '\t<script type="text/javascript" src="./touch.js"></script>\r\n';
 
 function walk(dir, relative = '') {
   let files = 0;
@@ -56,44 +88,21 @@ function walk(dir, relative = '') {
   return { files, bytes };
 }
 
-const BOOTSTRAP = (url) => `	<!-- FNF Online: which lobby server this page talks to.
-	     Change this one line and re-run tools/build-docs.js to point the web
-	     build somewhere else, or open the page with ?server=https://your-host
-	     to switch without rebuilding (the choice is remembered). -->
-	<script type="text/javascript">
-		window.FNF_ONLINE_SERVER = window.FNF_ONLINE_SERVER || '${url}';
-		(function () {
-			try {
-				var match = /[?&]server=([^&]+)/.exec(window.location.search);
-				if (match) {
-					var chosen = decodeURIComponent(match[1]).replace(/\\/+$/, '');
-					if (chosen && !/^https?:\\/\\//.test(chosen)) chosen = 'https://' + chosen;
-					window.FNF_ONLINE_SERVER = chosen;
-					window.localStorage.setItem('fnfOnlineServer', chosen);
-				}
-			} catch (e) {}
-			// A free Render service sleeps; start waking it while assets download.
-			try {
-				if (window.FNF_ONLINE_SERVER) {
-					fetch(window.FNF_ONLINE_SERVER + '/healthz', { mode: 'no-cors', cache: 'no-store' }).catch(function () {});
-				}
-			} catch (e) {}
-		})();
-	</script>
-
-`;
-
-function writeIndex() {
-  const file = path.join(OUT, 'index.html');
-  let html = fs.readFileSync(file, 'utf8');
-  const tag = '<script type="text/javascript" src="./FunkinOnline.js"></script>';
-  if (!html.includes(tag)) {
+/** Injects the server bootstrap in front of the Lime boot script. */
+function gamePage(html) {
+  if (!html.includes(GAME_TAG)) {
     throw new Error('index.html has no FunkinOnline.js script tag — did the Lime build change?');
   }
-  // Strip a bootstrap from an earlier run so re-running stays idempotent.
-  html = html.replace(/[ \t]*<!-- FNF Online: which lobby server[\s\S]*?<\/script>\r?\n\r?\n/, '');
-  html = html.replace(tag, BOOTSTRAP(SERVER_URL) + tag);
-  fs.writeFileSync(file, html);
+  const stripped = html.replace(/[ \t]*<!-- FNF Online: which lobby server[\s\S]*?<\/script>\r?\n\r?\n/, '');
+  return stripped.replace(GAME_TAG, BOOTSTRAP + GAME_TAG);
+}
+
+/** Adds the on-screen controller right before the closing body tag. */
+function withTouch(html) {
+  if (!html.includes('</body>')) throw new Error('index.html has no </body> to hang the touch controller on');
+  const out = html.replace('</body>', TOUCH_TAG + '</body>');
+  if (!out.includes('./touch.js')) throw new Error('touch controller was not injected into mobile.html');
+  return out;
 }
 
 function main() {
@@ -106,13 +115,28 @@ function main() {
   fs.mkdirSync(OUT, { recursive: true });
 
   const { files, bytes } = walk(SRC);
-  writeIndex();
+  const built = gamePage(fs.readFileSync(path.join(SRC, 'index.html'), 'utf8'));
+
+  fs.writeFileSync(path.join(OUT, 'play.html'), built);
+  fs.writeFileSync(path.join(OUT, 'mobile.html'), withTouch(built));
+  fs.copyFileSync(TOUCH, path.join(OUT, 'touch.js'));
+
+  const landing = fs.readFileSync(LANDING, 'utf8');
+  if (!landing.includes('{{SERVER_URL}}')) throw new Error('landing.html lost its {{SERVER_URL}} placeholder');
+  fs.writeFileSync(path.join(OUT, 'index.html'), landing.split('{{SERVER_URL}}').join(SERVER_URL));
+
   fs.writeFileSync(path.join(OUT, '.nojekyll'), '');
 
-  console.log(`docs/ rebuilt from ${path.relative(ROOT, SRC)}`);
+  console.log('docs/ rebuilt');
   console.log(`  files:  ${files}`);
   console.log(`  size:   ${(bytes / 1024 / 1024).toFixed(1)} MB`);
   console.log(`  server: ${SERVER_URL}`);
+  console.log('  pages:  index.html (chooser), play.html (keyboard), mobile.html (touch)');
 }
 
-main();
+try {
+  main();
+} catch (error) {
+  console.error(error.message || error);
+  process.exit(1);
+}

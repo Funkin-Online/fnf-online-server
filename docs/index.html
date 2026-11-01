@@ -1,231 +1,235 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-	
 	<meta charset="utf-8">
-	
 	<title>Funkin Online</title>
-	
-	<meta id="viewport" name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-	<meta name="mobile-web-app-capable" content="yes">
-	
-	
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+	<meta name="theme-color" content="#101014">
 	<link rel="shortcut icon" type="image/png" href="./favicon.png">
-	
-	
-		<!-- FNF Online: which lobby server this page talks to.
-	     Change this one line and re-run tools/build-docs.js to point the web
-	     build somewhere else, or open the page with ?server=https://your-host
-	     to switch without rebuilding (the choice is remembered). -->
+	<style>
+		:root {
+			--bg: #101014;
+			--panel: #1b1b23;
+			--panel-hi: #262633;
+			--pink: #ff3d7f;
+			--yellow: #ffd93d;
+			--green: #5be37d;
+			--white: #f4f4f8;
+			--dim: #8a8a9c;
+		}
+
+		* { box-sizing: border-box; }
+
+		html, body {
+			margin: 0;
+			padding: 0;
+			min-height: 100%;
+			background: var(--bg);
+			color: var(--white);
+			font-family: "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
+			-webkit-text-size-adjust: 100%;
+			-webkit-tap-highlight-color: transparent;
+		}
+
+		body {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			padding: max(24px, env(safe-area-inset-top)) 20px max(24px, env(safe-area-inset-bottom));
+			background:
+				radial-gradient(circle at 50% -10%, rgba(255, 61, 127, 0.28), transparent 60%),
+				radial-gradient(circle at 50% 120%, rgba(255, 217, 61, 0.12), transparent 55%),
+				var(--bg);
+		}
+
+		main {
+			width: 100%;
+			max-width: 820px;
+			text-align: center;
+		}
+
+		h1 {
+			margin: 0;
+			font-size: clamp(34px, 9vw, 74px);
+			letter-spacing: 0.16em;
+			text-transform: uppercase;
+			color: var(--pink);
+			text-shadow: 0 0 26px rgba(255, 61, 127, 0.45);
+		}
+
+		.sub {
+			margin: 10px 0 0;
+			font-size: clamp(12px, 3.2vw, 16px);
+			letter-spacing: 0.32em;
+			text-transform: uppercase;
+			color: var(--dim);
+		}
+
+		.question {
+			margin: clamp(28px, 6vw, 44px) 0 18px;
+			font-size: clamp(16px, 4vw, 22px);
+			letter-spacing: 0.1em;
+			color: var(--white);
+		}
+
+		.choices {
+			display: grid;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			gap: 14px;
+		}
+
+		@media (max-width: 520px) {
+			.choices { grid-template-columns: 1fr; }
+		}
+
+		.choice {
+			position: relative;
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			gap: 6px;
+			min-height: 132px;
+			padding: 22px 16px;
+			border: 2px solid rgba(244, 244, 248, 0.16);
+			border-radius: 16px;
+			background: linear-gradient(180deg, var(--panel-hi), var(--panel));
+			color: var(--white);
+			font-family: inherit;
+			font-size: clamp(18px, 4.6vw, 24px);
+			letter-spacing: 0.14em;
+			text-transform: uppercase;
+			cursor: pointer;
+			transition: transform 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+			-webkit-user-select: none;
+			user-select: none;
+			touch-action: manipulation;
+		}
+
+		.choice:hover:not(:disabled),
+		.choice:focus-visible:not(:disabled) {
+			transform: translateY(-2px);
+			border-color: var(--yellow);
+			box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+			outline: none;
+		}
+
+		.choice:active:not(:disabled) { transform: translateY(0) scale(0.99); }
+
+		.choice .icon { font-size: 30px; line-height: 1; }
+
+		.choice .hint {
+			font-size: 11px;
+			letter-spacing: 0.18em;
+			color: var(--dim);
+			text-transform: uppercase;
+		}
+
+		.choice.suggested { border-color: var(--pink); box-shadow: 0 0 0 1px rgba(255, 61, 127, 0.5) inset; }
+		.choice.suggested .hint { color: var(--pink); }
+
+		.choice:disabled {
+			opacity: 0.45;
+			cursor: not-allowed;
+			filter: grayscale(0.6);
+		}
+
+		footer {
+			margin-top: 22px;
+			font-size: 12px;
+			line-height: 1.7;
+			color: var(--dim);
+		}
+
+		#server {
+			word-break: break-all;
+			color: #5f5f72;
+		}
+
+		.busy { cursor: progress; }
+	</style>
+</head>
+<body>
+	<main>
+		<h1>Funkin Online</h1>
+		<p class="sub">1v1 rhythm battles</p>
+		<p class="question">What are you playing on?</p>
+
+		<div class="choices">
+			<button class="choice" id="pick-pc" type="button">
+				<span class="icon">🖥️</span>
+				<span>Play on PC</span>
+				<span class="hint">keyboard</span>
+			</button>
+			<button class="choice" id="pick-mobile" type="button">
+				<span class="icon">📱</span>
+				<span>Play on mobile</span>
+				<span class="hint">touch screen</span>
+			</button>
+		</div>
+
+		<footer>
+			<div id="status">&nbsp;</div>
+			<div>server: <span id="server">https://fnf-online-server.onrender.com</span></div>
+		</footer>
+	</main>
+
 	<script type="text/javascript">
-		window.FNF_ONLINE_SERVER = window.FNF_ONLINE_SERVER || 'https://fnf-online-server.onrender.com';
 		(function () {
+			var SERVER = 'https://fnf-online-server.onrender.com';
+			var statusEl = document.getElementById('status');
+			var pcButton = document.getElementById('pick-pc');
+			var mobileButton = document.getElementById('pick-mobile');
+
+			document.getElementById('server').textContent = SERVER;
+
+			// Keep ?server=... and any other query when moving on to the game.
+			function target(page) {
+				return page + (window.location.search || '');
+			}
+
+			function go(page) {
+				document.body.classList.add('busy');
+				statusEl.textContent = 'Loading ' + (page.indexOf('mobile') === 0 ? 'the touch build' : 'the game') + '…';
+				window.location.href = target(page);
+			}
+
+			pcButton.addEventListener('click', function () { go('play.html'); });
+			mobileButton.addEventListener('click', function () { go('mobile.html'); });
+
+			// Touch devices get the mobile button highlighted, mouse users the PC one.
+			var coarse = false;
 			try {
-				var match = /[?&]server=([^&]+)/.exec(window.location.search);
-				if (match) {
-					var chosen = decodeURIComponent(match[1]).replace(/\/+$/, '');
-					if (chosen && !/^https?:\/\//.test(chosen)) chosen = 'https://' + chosen;
-					window.FNF_ONLINE_SERVER = chosen;
-					window.localStorage.setItem('fnfOnlineServer', chosen);
-				}
+				coarse = window.matchMedia('(pointer: coarse)').matches
+					|| ('ontouchstart' in window)
+					|| (navigator.maxTouchPoints || 0) > 0;
 			} catch (e) {}
-			// A free Render service sleeps; start waking it while assets download.
-			try {
-				if (window.FNF_ONLINE_SERVER) {
-					fetch(window.FNF_ONLINE_SERVER + '/healthz', { mode: 'no-cors', cache: 'no-store' }).catch(function () {});
+			(coarse ? mobileButton : pcButton).classList.add('suggested');
+
+			// The touch build is a separate compile; don't offer it if it is missing.
+			fetch('mobile.html', { method: 'HEAD', cache: 'no-store' }).then(function (res) {
+				if (res.ok) return;
+				mobileButton.disabled = true;
+				mobileButton.querySelector('.hint').textContent = 'not in this build';
+				statusEl.textContent = 'The touch build is unavailable — play on PC.';
+			}).catch(function () {});
+
+			// Keys, for people who would rather not aim: P/1 desktop, M/2 mobile, ENTER picks.
+			window.addEventListener('keydown', function (event) {
+				var key = (event.key || '').toLowerCase();
+				if (key === 'p' || key === '1') { event.preventDefault(); go('play.html'); }
+				else if ((key === 'm' || key === '2') && !mobileButton.disabled) { event.preventDefault(); go('mobile.html'); }
+				else if (key === 'enter') {
+					event.preventDefault();
+					go(mobileButton.disabled || !coarse ? 'play.html' : 'mobile.html');
 				}
+			});
+
+			// A free Render service sleeps; start waking it while the player decides.
+			try {
+				if (SERVER) fetch(SERVER + '/healthz', { mode: 'no-cors', cache: 'no-store' }).catch(function () {});
 			} catch (e) {}
 		})();
 	</script>
-
-<script type="text/javascript" src="./FunkinOnline.js"></script>
-	
-	<script>
-		window.addEventListener ("touchmove", function (event) { event.preventDefault (); }, { capture: false, passive: false });
-		if (typeof window.devicePixelRatio != 'undefined' && window.devicePixelRatio > 2) {
-			var meta = document.getElementById ("viewport");
-			meta.setAttribute ('content', 'width=device-width, initial-scale=' + (2 / window.devicePixelRatio) + ', user-scalable=no');
-		}
-	</script>
-	
-	<style>
-		html,body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
-		#openfl-content { background: #000000; width: 100%; height: 100%; }
-		@font-face {
-			font-family: '5by7';
-			src: url('assets/fonts/5by7.ttf') format('truetype');
-			font-weight: normal;
-			font-style: normal;
-		}
-		@font-face {
-			font-family: '5by7 Bold';
-			src: url('assets/fonts/5by7_b.ttf') format('truetype');
-			font-weight: normal;
-			font-style: normal;
-		}
-		@font-face {
-			font-family: 'Consolas Italic';
-			src: url('assets/fonts/Consolas.ttf') format('truetype');
-			font-weight: normal;
-			font-style: normal;
-		}
-		@font-face {
-			font-family: 'DS-Digital';
-			src: url('assets/fonts/DS-DIGI.TTF') format('truetype');
-			font-weight: normal;
-			font-style: normal;
-		}
-		@font-face {
-			font-family: 'DS-Digital Bold';
-			src: url('assets/fonts/DS-DIGIB.TTF') format('truetype');
-			font-weight: normal;
-			font-style: normal;
-		}
-		@font-face {
-			font-family: 'DS-Digital Italic';
-			src: url('assets/fonts/DS-DIGII.TTF') format('truetype');
-			font-weight: normal;
-			font-style: normal;
-		}
-		@font-face {
-			font-family: 'DS-Digital Bold Italic';
-			src: url('assets/fonts/DS-DIGIT.TTF') format('truetype');
-			font-weight: normal;
-			font-style: normal;
-		}
-		@font-face {
-			font-family: 'Inconsolata Black';
-			src: url('assets/fonts/Inconsolata-Black.ttf') format('truetype');
-			font-weight: normal;
-			font-style: normal;
-		}
-		@font-face {
-			font-family: 'Inconsolata Bold';
-			src: url('assets/fonts/Inconsolata-Bold.ttf') format('truetype');
-			font-weight: normal;
-			font-style: normal;
-		}
-		@font-face {
-			font-family: 'Inconsolata ExtraBold';
-			src: url('assets/fonts/Inconsolata-ExtraBold.ttf') format('truetype');
-			font-weight: normal;
-			font-style: normal;
-		}
-		@font-face {
-			font-family: 'Inconsolata ExtraLight';
-			src: url('assets/fonts/Inconsolata-ExtraLight.ttf') format('truetype');
-			font-weight: normal;
-			font-style: normal;
-		}
-		@font-face {
-			font-family: 'Inconsolata Medium';
-			src: url('assets/fonts/Inconsolata-Medium.ttf') format('truetype');
-			font-weight: normal;
-			font-style: normal;
-		}
-		@font-face {
-			font-family: 'Inconsolata Regular';
-			src: url('assets/fonts/Inconsolata-Regular.ttf') format('truetype');
-			font-weight: normal;
-			font-style: normal;
-		}
-		@font-face {
-			font-family: 'Inconsolata SemiBold';
-			src: url('assets/fonts/Inconsolata-SemiBold.ttf') format('truetype');
-			font-weight: normal;
-			font-style: normal;
-		}
-		@font-face {
-			font-family: 'Pixel Arial 11 Bold';
-			src: url('assets/fonts/pixel.otf') format('opentype');
-			font-weight: normal;
-			font-style: normal;
-		}
-		@font-face {
-			font-family: 'Quantico-Bold';
-			src: url('assets/fonts/Quantico-Bold.ttf') format('truetype');
-			font-weight: normal;
-			font-style: normal;
-		}
-		@font-face {
-			font-family: 'Quantico-BoldItalic';
-			src: url('assets/fonts/Quantico-BoldItalic.ttf') format('truetype');
-			font-weight: normal;
-			font-style: normal;
-		}
-		@font-face {
-			font-family: 'Quantico-Italic';
-			src: url('assets/fonts/Quantico-Italic.ttf') format('truetype');
-			font-weight: normal;
-			font-style: normal;
-		}
-		@font-face {
-			font-family: 'Quantico';
-			src: url('assets/fonts/Quantico-Regular.ttf') format('truetype');
-			font-weight: normal;
-			font-style: normal;
-		}
-		@font-face {
-			font-family: 'Share Tech Mono';
-			src: url('assets/fonts/ShareTechMono-Regular.ttf') format('truetype');
-			font-weight: normal;
-			font-style: normal;
-		}
-		@font-face {
-			font-family: 'VCR OSD Mono Bold';
-			src: url('assets/fonts/vcr-bold.ttf') format('truetype');
-			font-weight: normal;
-			font-style: normal;
-		}
-		@font-face {
-			font-family: 'VCR OSD Mono Bold Italic';
-			src: url('assets/fonts/vcr-bolditalic.ttf') format('truetype');
-			font-weight: normal;
-			font-style: normal;
-		}
-		@font-face {
-			font-family: 'VCR OSD Mono Italic';
-			src: url('assets/fonts/vcr-italic.ttf') format('truetype');
-			font-weight: normal;
-			font-style: normal;
-		}
-		@font-face {
-			font-family: 'VCR OSD Mono';
-			src: url('assets/fonts/vcr.ttf') format('truetype');
-			font-weight: normal;
-			font-style: normal;
-		}
-		@font-face {
-			font-family: 'YoureGone-Regular';
-			src: url('assets/fonts/YoureGone-Regular.otf') format('opentype');
-			font-weight: normal;
-			font-style: normal;
-		}
-		@font-face {
-			font-family: 'Nokia Cellphone FC Small';
-			src: url('flixel/fonts/nokiafc22.ttf') format('truetype');
-			font-weight: normal;
-			font-style: normal;
-		}
-		@font-face {
-			font-family: 'Monsterrat';
-			src: url('flixel/fonts/monsterrat.ttf') format('truetype');
-			font-weight: normal;
-			font-style: normal;
-		}
-
-	</style>
-	
-</head>
-<body>
-	
-	<noscript>This webpage makes extensive use of JavaScript. Please enable JavaScript in your web browser to view this page.</noscript>
-	
-	<div id="openfl-content"></div>
-	
-	<script type="text/javascript">
-		lime.embed ("FunkinOnline", "openfl-content", 1280, 720, { parameters: {} });
-	</script>
-	
 </body>
 </html>

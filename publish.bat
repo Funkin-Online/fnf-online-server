@@ -1,6 +1,6 @@
 @echo off
-REM Rebuilds the HTML5 game, refreshes docs\ (GitHub Pages + the Render host)
-REM and pushes. Render redeploys itself; Pages republishes from docs\.
+REM Rebuilds the HTML5 game, refreshes docs\ (GitHub Pages and the Render host)
+REM and pushes. Render redeploys itself; Pages republishes docs\.
 setlocal
 
 set "PATH=C:\HaxeToolkit\haxe;C:\HaxeToolkit\neko;%PATH%"
@@ -18,7 +18,7 @@ if not exist "assets\images\mainmenu\online.png" (
 )
 
 echo.
-echo Building HTML5 (debug)...
+echo [1/3] Building HTML5...
 haxelib run lime build html5 -debug
 if errorlevel 1 (
   echo.
@@ -29,7 +29,7 @@ if errorlevel 1 (
 
 cd /d "%~dp0"
 echo.
-echo Rebuilding docs\...
+echo [2/3] Rebuilding docs\ (chooser + keyboard + touch pages)...
 node tools\build-docs.js
 if errorlevel 1 (
   echo.
@@ -39,13 +39,13 @@ if errorlevel 1 (
 )
 
 echo.
-echo Committing and pushing...
+echo [3/3] Committing and pushing...
 git add -A
 git commit -m "Update web build"
 git push
 
 echo.
 echo Done. Render redeploys on this push; Pages republishes docs\ shortly.
-echo   Render: https://fnf-online-server.onrender.com
 echo   Pages:  https://funkin-online.github.io/fnf-online-server/
+echo   Render: https://fnf-online-server.onrender.com
 pause
