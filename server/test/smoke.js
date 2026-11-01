@@ -130,9 +130,14 @@ async function main() {
 
   await a.ok('/api/lobby/ready', { ready: true });
   const auto = await b.ok('/api/lobby/ready', { ready: true });
-  assert.strictEqual(auto.lobby.phase, 'countdown');
+  assert.strictEqual(auto.lobby.phase, 'loading', 'both ready must wait for both sides to load');
+  await a.ok('/api/lobby/ready', { loaded: true });
+  const armed = await b.ok('/api/lobby/ready', { loaded: true });
+  assert.strictEqual(armed.lobby.phase, 'countdown');
+  assert.strictEqual(armed.lobby.startDelayMs, 5000);
+  t('both ready -> loading -> both loaded -> countdown');
   assert.ok(['bopeebo', 'fresh'].includes(auto.lobby.song.id), 'song must come from the combined pick pool');
-  assert.ok(auto.lobby.startAt > Date.now());
+  assert.ok(armed.lobby.startAt > Date.now(), 'clock is armed only after both loaded');
   t(`both ready -> random song from both picks (${auto.lobby.song.id})`);
   assert.strictEqual(auto.lobby.song.difficulty, 'hard');
   assert.strictEqual(auto.lobby.song.variation, 'pico');
@@ -143,10 +148,10 @@ async function main() {
   assert.strictEqual(early.ok, false);
   t('results are rejected during the countdown');
 
-  await sleep(4300);
+  await sleep(5400);
   const live = await a.ok('/api/lobby/state');
   assert.strictEqual(live.lobby.phase, 'playing');
-  t('countdown flips to playing after ~4s');
+  t('countdown flips to playing after ~5s');
 
   const liveHud = await a.ok('/api/lobby/live', {
     score: 1200,
@@ -180,7 +185,7 @@ async function main() {
   await a.ok('/api/lobby/pick', { songs: ['bopeebo'] });
   await b.ok('/api/lobby/ready', { ready: true });
   await a.ok('/api/lobby/ready', { ready: true });
-  await sleep(4300);
+  await sleep(5400);
   await b.ok('/api/lobby/leave');
   const forfeit = await a.ok('/api/lobby/state');
   assert.strictEqual(forfeit.lobby.phase, 'results');
@@ -211,7 +216,9 @@ async function main() {
   await b.ok('/api/lobby/pick', { songs: ['fresh'] });
   await a.ok('/api/lobby/ready', { ready: true });
   await b.ok('/api/lobby/ready', { ready: true });
-  await sleep(4300);
+  await a.ok('/api/lobby/ready', { loaded: true });
+  await b.ok('/api/lobby/ready', { loaded: true });
+  await sleep(5400);
   await a.ok('/api/lobby/result', { score: 50000, accuracy: 99.9, misses: 0 });
   const scored = await b.ok('/api/lobby/result', { score: 99999, accuracy: 90.0, misses: 9 });
   assert.strictEqual(scored.lobby.winnerId, scored.lobby.you.id);
@@ -229,7 +236,9 @@ async function main() {
   await b.ok('/api/lobby/pick', { songs: ['spookeez'] });
   await a.ok('/api/lobby/ready', { ready: true });
   await b.ok('/api/lobby/ready', { ready: true });
-  await sleep(4300);
+  await a.ok('/api/lobby/ready', { loaded: true });
+  await b.ok('/api/lobby/ready', { loaded: true });
+  await sleep(5400);
   await a.ok('/api/lobby/result', { score: 1000, accuracy: 99.5, misses: 0 });
   const accRes = await b.ok('/api/lobby/result', { score: 500000, accuracy: 88.0, misses: 0 });
   assert.strictEqual(accRes.lobby.winnerId, accRes.lobby.players.find((p) => p.name === 'Alice').id);
@@ -242,7 +251,9 @@ async function main() {
   await b.ok('/api/lobby/pick', { songs: ['bopeebo'] });
   await a.ok('/api/lobby/ready', { ready: true });
   await b.ok('/api/lobby/ready', { ready: true });
-  await sleep(4300);
+  await a.ok('/api/lobby/ready', { loaded: true });
+  await b.ok('/api/lobby/ready', { loaded: true });
+  await sleep(5400);
   await a.ok('/api/lobby/result', { score: 999, accuracy: 99, misses: 0, failed: true });
   const failRes = await b.ok('/api/lobby/result', { score: 1, accuracy: 1, misses: 99, failed: false });
   assert.strictEqual(failRes.lobby.winnerId, failRes.lobby.you.id, 'dying loses even with a higher score');

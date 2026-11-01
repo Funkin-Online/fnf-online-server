@@ -31,7 +31,7 @@ const LOBBY_IDLE_MS = 10 * 60 * 1000; // empty lobbies are reaped after this
 const PLAYER_STALE_MS = 5 * 60 * 1000; // no poll for 5 minutes -> dropped
 const PLAYER_DISCONNECTED_MS = 30 * 1000; // shown as "reconnecting"
 const QUEUE_STALE_MS = 60 * 1000; // auto-cancel a stale queue entry
-const START_DELAY_MS = 4000; // countdown before phase flips to "playing"
+const START_DELAY_MS = 5000; // wait after both sides load, before the song
 const MAX_JSON_BYTES = 256 * 1024;
 const MAX_SONGS = 500;
 const MODES = ['score', 'accuracy', 'misses'];
@@ -325,7 +325,8 @@ function leaveLobby(player, { silent = false } = {}) {
   }
 
   // Opponent bailed mid-song -> the remaining player wins by forfeit.
-  if (lobby.phase === 'playing' || lobby.phase === 'countdown') {
+  // 'loading' counts as started: leaving now must still end the match.
+  if (lobby.phase === 'playing' || lobby.phase === 'countdown' || lobby.phase === 'loading') {
     lobby.phase = 'results';
     lobby.forfeit = true;
     lobby.winnerId = lobby.playerIds[0] ?? null;
@@ -473,6 +474,9 @@ function snapshot(lobby, viewer) {
     forfeit: lobby.forfeit,
     matchmade: lobby.matchmade,
     countdownMs: lobby.phase === 'countdown' ? Math.max(0, lobby.startAt - now()) : 0,
+    startDelayMs: START_DELAY_MS,
+    loadedCount: lobby.loaded ? lobby.loaded.size : 0,
+    playerCount: list.length,
   };
 }
 
@@ -635,7 +639,7 @@ async function route(req, res, path) {
         return send(res, 200, { ok: true, lobby: snapshot(lobby, player) });
       }
       if (lobby.playerIds.length >= MAX_PLAYERS) return fail(res, 409, 'That lobby is already full.');
-      if (lobby.phase === 'playing' || lobby.phase === 'countdown') return fail(res, 409, 'That match has already started.');
+      if (lobby.phase === 'playing' || lobby.phase === 'countdown' || lobby.phase === 'loading') return fail(res, 409, 'That match has already started.');
       if (lobby.phase === 'results') return fail(res, 409, 'That match already finished.');
 
       if (player.lobby) leaveLobby(player);
@@ -710,6 +714,12 @@ async function route(req, res, path) {
     }
 
     // ---- in-lobby actions ------------------------------------------------
+    case '/api/lobby/rename': {
+      player.name = sanitizeName(body.name, player.name);
+      const lobby = roomFor(player);
+      return send(res, 200, { ok: true, name: player.name, lobby: lobby ? snapshot(lobby, player) : null });
+    }
+
     case '/api/lobby/pick': {
       const lobby = roomFor(player);
       if (!lobby) return fail(res, 404, 'You are not in a lobby.');
