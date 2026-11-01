@@ -5,12 +5,13 @@
  * does not build for HTML5), so instead of recompiling we drive the game the
  * way a keyboard would: on-screen buttons dispatch the same key events Lime
  * listens for on `window`. Arrow keys are both menu navigation and the four
- * note lanes in this engine, so one D-pad plays and navigates.
+ * note lanes in this engine, so the arrows play and navigate.
  *
- * ARRANGE MODE — the "✥" button lets the player drag the D-pad, the action
- * buttons and the number pad anywhere on screen, so each pair of thumbs can
- * sit comfortably. Positions are saved per device (localStorage) and clamped
- * to the viewport, including after a rotation. "Reset" puts them back.
+ * ARRANGE MODE — the "✥" button lets the player drag EACH arrow on its own, plus
+ * the action buttons and the number pad, anywhere on screen. Every control
+ * remembers its own spot, so one thumb can sit high and the other low. Positions
+ * are saved per device (localStorage) and clamped to the viewport, including
+ * after a rotation. "Reset" puts everything back in the default cross.
  *
  * Injected into mobile.html by tools/build-docs.js; nothing here touches the
  * desktop page.
@@ -21,7 +22,7 @@
   if (window.__fnfTouchLoaded) return;
   window.__fnfTouchLoaded = true;
 
-  var STORAGE_KEY = 'fnfTouch.layout.v1';
+  var STORAGE_KEY = 'fnfTouch.layout.v2';
 
   var CODE = {
     BACKSPACE: 8,
@@ -34,6 +35,13 @@
     DOWN: 40,
     ZERO: 48
   };
+
+  var ARROWS = [
+    { key: 'up', label: '▲', code: CODE.UP, modifier: 'up', title: 'Up' },
+    { key: 'left', label: '◀', code: CODE.LEFT, modifier: 'left', title: 'Left' },
+    { key: 'right', label: '▶', code: CODE.RIGHT, modifier: 'right', title: 'Right' },
+    { key: 'down', label: '▼', code: CODE.DOWN, modifier: 'down', title: 'Down' }
+  ];
 
   var arranging = false;
   var groups = {};
@@ -109,6 +117,8 @@
   function resetLayout() {
     try {
       window.localStorage.removeItem(STORAGE_KEY);
+      // Older builds saved the arrows as one block; drop that too.
+      window.localStorage.removeItem('fnfTouch.layout.v1');
     } catch (e) {}
     for (var key in groups) {
       var element = groups[key];
@@ -161,8 +171,12 @@
     '.fnf-touch{position:fixed;inset:0;pointer-events:none;z-index:2147483000;',
     'font-family:"Trebuchet MS",system-ui,sans-serif;-webkit-user-select:none;user-select:none;',
     'padding:0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}',
-    '.fnf-touch__pad{position:absolute;left:14px;bottom:16px;pointer-events:auto;display:grid;',
-    'grid-template-columns:repeat(3,60px);grid-template-rows:repeat(3,60px);gap:6px}',
+    // each arrow is its own control, defaulted to the classic cross
+    '.fnf-touch__arrow{position:absolute;width:60px;height:60px;font-size:24px;pointer-events:auto}',
+    '.fnf-touch__arrow--up{left:80px;bottom:148px}',
+    '.fnf-touch__arrow--left{left:14px;bottom:82px}',
+    '.fnf-touch__arrow--right{left:146px;bottom:82px}',
+    '.fnf-touch__arrow--down{left:80px;bottom:16px}',
     '.fnf-touch__actions{position:absolute;right:14px;bottom:16px;pointer-events:auto;',
     'display:flex;align-items:flex-end;gap:10px}',
     '.fnf-touch__digits{position:absolute;right:14px;bottom:112px;pointer-events:auto;display:none;',
@@ -173,31 +187,28 @@
     'letter-spacing:.04em;backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);',
     'touch-action:none;padding:0;margin:0;display:flex;align-items:center;justify-content:center}',
     '.fnf-touch button:active,.fnf-touch button.is-held{background:rgba(255,61,127,.75);border-color:#ffd93d}',
-    '.fnf-touch__pad button{width:60px;height:60px;font-size:24px}',
     '.fnf-touch__round{width:74px;height:74px;border-radius:50%;font-size:26px}',
     '.fnf-touch__round--a{border-color:rgba(91,227,125,.85)}',
     '.fnf-touch__round--b{border-color:rgba(255,61,127,.85)}',
     '.fnf-touch__small{width:56px;height:44px;font-size:13px;letter-spacing:.1em}',
     '.fnf-touch__menu{position:absolute;top:max(10px,env(safe-area-inset-top));right:12px;',
     'pointer-events:auto;display:flex;gap:8px}',
-    '.fnf-touch__hidden .fnf-touch__pad,.fnf-touch__hidden .fnf-touch__actions,',
+    '.fnf-touch__hidden .fnf-touch__arrow,.fnf-touch__hidden .fnf-touch__actions,',
     '.fnf-touch__hidden .fnf-touch__digits{display:none!important}',
-    // arrange mode
-    '.fnf-touch--arrange .fnf-touch__pad,.fnf-touch--arrange .fnf-touch__actions,',
+    // arrange mode: arrows stay tappable so they can be grabbed
+    '.fnf-touch--arrange .fnf-touch__arrow,.fnf-touch--arrange .fnf-touch__actions,',
     '.fnf-touch--arrange .fnf-touch__digits{outline:2px dashed rgba(255,217,61,.9);outline-offset:8px;',
     'cursor:grab;touch-action:none}',
-    '.fnf-touch--arrange .fnf-touch__pad button,.fnf-touch--arrange .fnf-touch__actions button,',
+    '.fnf-touch--arrange .fnf-touch__actions button,',
     '.fnf-touch--arrange .fnf-touch__digits button{pointer-events:none;opacity:.9}',
     '.fnf-touch__bar{position:absolute;left:50%;transform:translateX(-50%);',
     'top:max(10px,env(safe-area-inset-top));pointer-events:auto;display:none;align-items:center;gap:8px;',
-    'padding:8px 10px;border-radius:14px;background:rgba(16,16,20,.9);border:2px solid rgba(255,217,61,.8);',
+    'padding:8px 10px;border-radius:14px;background:rgba(16,16,20,.92);border:2px solid rgba(255,217,61,.8);',
     'color:#f4f4f8;font-size:12px;letter-spacing:.06em;max-width:94vw}',
     '.fnf-touch--arrange .fnf-touch__bar{display:flex}',
     '.fnf-touch__bar span{line-height:1.35}',
     '.fnf-touch__bar button{width:auto;padding:0 12px;height:40px;font-size:13px}',
-    '@media (max-height:430px){.fnf-touch__pad{grid-template-columns:repeat(3,48px);',
-    'grid-template-rows:repeat(3,48px)}.fnf-touch__pad button{width:48px;height:48px;font-size:20px}',
-    '.fnf-touch__round{width:60px;height:60px}}'
+    '@media (max-height:430px){.fnf-touch__round{width:60px;height:60px}}'
   ].join('');
   document.head.appendChild(style);
 
@@ -236,19 +247,15 @@
     element.addEventListener('contextmenu', function (event) { event.preventDefault(); });
   }
 
-  // D-pad: menu movement, and the four note lanes during a song.
-  var pad = document.createElement('div');
-  pad.className = 'fnf-touch__pad';
-  pad.appendChild(document.createElement('span'));
-  pad.appendChild(button('▲', CODE.UP, '', 'Up'));
-  pad.appendChild(document.createElement('span'));
-  pad.appendChild(button('◀', CODE.LEFT, '', 'Left'));
-  pad.appendChild(document.createElement('span'));
-  pad.appendChild(button('▶', CODE.RIGHT, '', 'Right'));
-  pad.appendChild(document.createElement('span'));
-  pad.appendChild(button('▼', CODE.DOWN, '', 'Down'));
-  pad.appendChild(document.createElement('span'));
-  root.appendChild(pad);
+  // Four separate arrows: each one drags and stores its own position.
+  var arrowElements = {};
+  for (var a = 0; a < ARROWS.length; a++) {
+    var spec = ARROWS[a];
+    var arrow = button(spec.label, spec.code, 'fnf-touch__arrow fnf-touch__arrow--' + spec.modifier, spec.title);
+    arrow.setAttribute('data-arrow', spec.key);
+    root.appendChild(arrow);
+    arrowElements[spec.key] = arrow;
+  }
 
   // Confirm / back / space.
   var actions = document.createElement('div');
@@ -278,7 +285,7 @@
   var bar = document.createElement('div');
   bar.className = 'fnf-touch__bar';
   var barText = document.createElement('span');
-  barText.textContent = 'Drag the arrows where your thumbs want them.';
+  barText.textContent = 'Drag any arrow, the buttons or the keypad — each one moves on its own.';
   var resetButton = button('Reset', null, '', 'Reset control positions');
   resetButton.addEventListener('click', function () { resetLayout(); });
   var doneButton = button('Done', null, '', 'Finish arranging');
@@ -310,17 +317,18 @@
       digits.classList.add('is-open');
       root.classList.remove('fnf-touch__hidden');
     } else {
-      // Save wherever everything ended up.
       for (var key in groups) persistGroup(key);
     }
   }
 
   function layout() {
-    storeGroup('pad', pad);
+    for (var key in arrowElements) {
+      storeGroup(key, arrowElements[key]);
+      makeDraggable(key, arrowElements[key]);
+    }
     storeGroup('actions', actions);
-    storeGroup('digits', digits);
-    makeDraggable('pad', pad);
     makeDraggable('actions', actions);
+    storeGroup('digits', digits);
     makeDraggable('digits', digits);
   }
 

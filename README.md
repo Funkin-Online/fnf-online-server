@@ -100,9 +100,14 @@ The site root asks PC or mobile before anything loads:
 | `play.html` | the game, keyboard |
 | `mobile.html` | the game plus the on-screen touch controller (`touch.js`) |
 
-On a phone the D-pad moves menus and plays the four note lanes, **A** confirms,
+On a phone the arrows move menus and play the four note lanes, **A** confirms,
 **B** goes back, **SPACE** readies up, and **123** opens a number pad for lobby
 codes.
+
+Tap **✥** to arrange: every arrow drags **on its own**, along with the A/B/SPACE
+cluster and the number pad, so each thumb can sit where it is comfortable.
+Positions are saved on the device and clamped to the screen; **Reset** puts the
+classic cross back.
 
 To republish after changing the game:
 
